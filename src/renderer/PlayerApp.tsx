@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text } from 'react-konva'
 import logoUrl from './assets/MapBerry.png'
-import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerOverlayState, PlayerPointer, PlayerTimerState, PlayerViewport, RoomRecord, WallRecord } from '../shared/mapberry'
-import { EMPTY_PLAYER_OVERLAY, normalizeGridColor } from '../shared/mapberry'
+import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerOverlayAnchor, PlayerOverlayPlacement, PlayerOverlayState, PlayerPointer, PlayerTimerState, PlayerViewport, RoomRecord, WallRecord } from '../shared/mapberry'
+import { DEFAULT_PLAYER_OVERLAY_SETTINGS, EMPTY_PLAYER_OVERLAY, normalizeGridColor } from '../shared/mapberry'
 import { localAssetUrl } from './lib/asset'
 import { useAssetImage } from './lib/image'
 import { distance, flattened, polygonCenter, rectFromPoints } from './lib/mapMath'
@@ -145,6 +146,7 @@ function PlayerOverlay({ map, overlay }: { map: MapScene | null; overlay: Player
   const handout = map?.handouts.find((entry) => entry.id === overlay.activeHandoutId) ?? null
   const timer = overlay.timer
   const remaining = timer ? timerRemainingSeconds(timer, now) : null
+  const settings = overlay.settings ?? DEFAULT_PLAYER_OVERLAY_SETTINGS
 
   useEffect(() => {
     if (!timer?.running) return
@@ -156,28 +158,65 @@ function PlayerOverlay({ map, overlay }: { map: MapScene | null; overlay: Player
 
   return (
     <div className="player-overlay" data-testid="player-overlay">
-      {timer && (
+      {timer && renderOverlayCopies(settings.timer, () => (
         <div className={`player-timer ${remaining === 0 ? 'expired' : ''}`} data-testid="player-timer">
           <span>{timer.label}</span>
           <strong>{formatTimer(remaining ?? 0)}</strong>
         </div>
-      )}
-      {overlay.notice && (
+      ), 'timer')}
+      {overlay.notice && renderOverlayCopies(settings.notice, () => (
         <div className={`player-notice ${overlay.notice.tone}`} data-testid="player-notice">
           <span>{overlay.notice.title}</span>
           <strong>{overlay.notice.body}</strong>
         </div>
-      )}
-      {handout && (
+      ), 'notice')}
+      {handout && renderOverlayCopies(settings.handout, () => (
         <article className="player-handout" data-testid="player-handout">
           <span>Handout</span>
           <h1>{handout.title}</h1>
           {handout.imagePath && <img src={localAssetUrl(handout.imagePath)} alt="" data-testid="player-handout-image" />}
           <p>{handout.body}</p>
         </article>
-      )}
+      ), 'handout')}
     </div>
   )
+}
+
+function renderOverlayCopies(placement: PlayerOverlayPlacement, content: () => ReactNode, id: string) {
+  return overlayCopies(placement).map((copy) => (
+    <div
+      key={`${id}-${copy.anchor}-${copy.flipped ? 'flipped' : 'normal'}`}
+      className={`player-overlay-slot anchor-${copy.anchor} ${copy.flipped ? 'is-flipped' : ''}`}
+      data-overlay-anchor={copy.anchor}
+      data-overlay-flipped={copy.flipped ? 'true' : 'false'}
+    >
+      <div className="player-overlay-copy">
+        {content()}
+      </div>
+    </div>
+  ))
+}
+
+function overlayCopies(placement: PlayerOverlayPlacement): Array<{ anchor: PlayerOverlayAnchor; flipped: boolean }> {
+  if (placement.layout === 'mirror-x') {
+    return mirrorXAnchors(placement.anchor).map((anchor, index) => ({ anchor, flipped: index === 1 }))
+  }
+  if (placement.layout === 'mirror-y') {
+    return mirrorYAnchors(placement.anchor).map((anchor, index) => ({ anchor, flipped: index === 1 }))
+  }
+  return [{ anchor: placement.anchor, flipped: false }]
+}
+
+function mirrorXAnchors(anchor: PlayerOverlayAnchor): [PlayerOverlayAnchor, PlayerOverlayAnchor] {
+  if (anchor.startsWith('top')) return ['top-left', 'top-right']
+  if (anchor.startsWith('bottom')) return ['bottom-left', 'bottom-right']
+  return ['left', 'right']
+}
+
+function mirrorYAnchors(anchor: PlayerOverlayAnchor): [PlayerOverlayAnchor, PlayerOverlayAnchor] {
+  if (anchor.endsWith('left')) return ['top-left', 'bottom-left']
+  if (anchor.endsWith('right')) return ['top-right', 'bottom-right']
+  return ['top', 'bottom']
 }
 
 function getPlayerTransform(map: MapScene, viewport: PlayerViewport | null, stageWidth: number, stageHeight: number, width: number, height: number) {

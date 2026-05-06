@@ -55,8 +55,8 @@ import type {
   ToolId,
   WallRecord
 } from '../shared/mapberry'
-import type { HandoutRecord, PlayerNoticeTone, PlayerOverlayState, PlayerTimerState } from '../shared/mapberry'
-import { EMPTY_PLAYER_OVERLAY, gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
+import type { HandoutRecord, PlayerNoticeTone, PlayerOverlayKind, PlayerOverlayPlacement, PlayerOverlayState, PlayerTimerState } from '../shared/mapberry'
+import { DEFAULT_PLAYER_OVERLAY_SETTINGS, EMPTY_PLAYER_OVERLAY, gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
 import { useAssetImage } from './lib/image'
 import { applyFogOp, createFogCanvas, type FogOp } from './lib/fog'
 import { distance, flattened, polygonCenter, rectFromPoints, screenToMap, uid } from './lib/mapMath'
@@ -400,6 +400,19 @@ export function App() {
     setPlayerOverlay((overlay) => ({ ...overlay, timer: null }))
   }
 
+  function patchOverlayPlacement(kind: PlayerOverlayKind, patch: Partial<PlayerOverlayPlacement>) {
+    setPlayerOverlay((overlay) => ({
+      ...overlay,
+      settings: {
+        ...(overlay.settings ?? DEFAULT_PLAYER_OVERLAY_SETTINGS),
+        [kind]: {
+          ...(overlay.settings ?? DEFAULT_PLAYER_OVERLAY_SETTINGS)[kind],
+          ...patch
+        }
+      }
+    }))
+  }
+
   if (!ready) {
     return <div className="splash"><img src={logoUrl} alt="" /><span>MapBerry lädt...</span></div>
   }
@@ -580,6 +593,7 @@ export function App() {
                 onPauseOrResumeTimer={pauseOrResumeTimer}
                 onResetTimer={resetTimer}
                 onClearTimer={clearTimer}
+                onOverlayPlacement={patchOverlayPlacement}
                 onTool={(nextTool) => {
                   setTool(nextTool)
                   setOpenToolGroup(null)
@@ -660,6 +674,7 @@ function ToolDock({
   onPauseOrResumeTimer,
   onResetTimer,
   onClearTimer,
+  onOverlayPlacement,
   onTool
 }: {
   tool: ToolId
@@ -697,6 +712,7 @@ function ToolDock({
   onPauseOrResumeTimer: () => void
   onResetTimer: () => void
   onClearTimer: () => void
+  onOverlayPlacement: (kind: PlayerOverlayKind, patch: Partial<PlayerOverlayPlacement>) => void
   onTool: (tool: ToolId) => void
 }) {
   const gridOpen = openGroup === 'grid'
@@ -791,6 +807,7 @@ function ToolDock({
             onPauseOrResumeTimer={onPauseOrResumeTimer}
             onResetTimer={onResetTimer}
             onClearTimer={onClearTimer}
+            onOverlayPlacement={onOverlayPlacement}
           />
         )}
         <button
@@ -960,7 +977,8 @@ function LiveSessionPopover({
   onStartTimer,
   onPauseOrResumeTimer,
   onResetTimer,
-  onClearTimer
+  onClearTimer,
+  onOverlayPlacement
 }: {
   map: MapScene
   overlay: PlayerOverlayState
@@ -989,11 +1007,13 @@ function LiveSessionPopover({
   onPauseOrResumeTimer: () => void
   onResetTimer: () => void
   onClearTimer: () => void
+  onOverlayPlacement: (kind: PlayerOverlayKind, patch: Partial<PlayerOverlayPlacement>) => void
 }) {
   const selectedHandout = map.handouts.find((handout) => handout.id === selectedHandoutId) ?? null
   const timer = overlay.timer
   const remaining = timer ? timerRemainingSeconds(timer, clockNow) : null
   const canSendNotice = noticeBody.trim().length > 0
+  const settings = overlay.settings ?? DEFAULT_PLAYER_OVERLAY_SETTINGS
 
   return (
     <div className="tool-popover live-popover" role="dialog" aria-label="Live-Spielerfunktionen">
@@ -1008,6 +1028,13 @@ function LiveSessionPopover({
         </div>
         <input value={noticeTitle} aria-label="Nachrichtentitel" data-testid="live-message-title" onChange={(event) => onNoticeTitle(event.target.value)} />
         <textarea value={noticeBody} aria-label="Nachrichtentext" data-testid="live-message-body" placeholder="Kurze Nachricht an das Spielerfenster" onChange={(event) => onNoticeBody(event.target.value)} />
+        <OverlayPlacementControls
+          kind="notice"
+          value={settings.notice}
+          label="Nachricht"
+          testIdPrefix="live-message"
+          onChange={onOverlayPlacement}
+        />
         <div className="live-actions">
           <button className="primary icon-text" data-testid="live-message-send" disabled={!canSendNotice} onClick={onSendNotice}>
             <Send size={16} />
@@ -1029,6 +1056,13 @@ function LiveSessionPopover({
           <input value={timerLabel} aria-label="Timer-Beschriftung" data-testid="live-timer-label" onChange={(event) => onTimerLabel(event.target.value)} />
           <input type="number" min="0.1" max="240" step="0.5" value={timerMinutes} aria-label="Timer-Minuten" data-testid="live-timer-minutes" onChange={(event) => onTimerMinutes(Number(event.target.value) || 1)} />
         </div>
+        <OverlayPlacementControls
+          kind="timer"
+          value={settings.timer}
+          label="Timer"
+          testIdPrefix="live-timer"
+          onChange={onOverlayPlacement}
+        />
         <div className="live-actions">
           <button className="primary icon-text" data-testid="live-timer-start" onClick={onStartTimer}>
             <Play size={16} />
@@ -1058,6 +1092,13 @@ function LiveSessionPopover({
           <option value="">Kein Handout</option>
           {map.handouts.map((handout) => <option key={handout.id} value={handout.id}>{handout.title}</option>)}
         </select>
+        <OverlayPlacementControls
+          kind="handout"
+          value={settings.handout}
+          label="Handout"
+          testIdPrefix="live-handout"
+          onChange={onOverlayPlacement}
+        />
         {selectedHandout && (
           <>
             <input value={selectedHandout.title} aria-label="Handout-Titel" data-testid="live-handout-title" onChange={(event) => onPatchHandout(selectedHandout.id, { title: event.target.value })} />
@@ -1095,6 +1136,49 @@ function LiveSessionPopover({
 
 function MessageIcon() {
   return <Type size={16} />
+}
+
+function OverlayPlacementControls({
+  kind,
+  value,
+  label,
+  testIdPrefix,
+  onChange
+}: {
+  kind: PlayerOverlayKind
+  value: PlayerOverlayPlacement
+  label: string
+  testIdPrefix: string
+  onChange: (kind: PlayerOverlayKind, patch: Partial<PlayerOverlayPlacement>) => void
+}) {
+  return (
+    <div className="overlay-placement-controls">
+      <label>
+        <span>{label}-Position</span>
+        <select
+          value={value.anchor}
+          aria-label={`${label}-Position`}
+          data-testid={`${testIdPrefix}-position`}
+          onChange={(event) => onChange(kind, { anchor: event.target.value as PlayerOverlayPlacement['anchor'] })}
+        >
+          {overlayAnchorOptions().map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>{label}-Ausrichtung</span>
+        <select
+          value={value.layout}
+          aria-label={`${label}-Ausrichtung`}
+          data-testid={`${testIdPrefix}-layout`}
+          onChange={(event) => onChange(kind, { layout: event.target.value as PlayerOverlayPlacement['layout'] })}
+        >
+          <option value="single">Einfach</option>
+          <option value="mirror-x">Beidseitig links/rechts</option>
+          <option value="mirror-y">Beidseitig oben/unten</option>
+        </select>
+      </label>
+    </div>
+  )
 }
 
 function ToolMenuButton({
@@ -1775,6 +1859,20 @@ function clampGridOffset(offset: number, gridSize: number) {
 
 function formatPx(value: number) {
   return `${value > 0 ? '+' : ''}${value}px`
+}
+
+function overlayAnchorOptions(): Array<{ value: PlayerOverlayPlacement['anchor']; label: string }> {
+  return [
+    { value: 'center', label: 'Mitte' },
+    { value: 'top', label: 'Oben mittig' },
+    { value: 'bottom', label: 'Unten mittig' },
+    { value: 'left', label: 'Links mittig' },
+    { value: 'right', label: 'Rechts mittig' },
+    { value: 'top-left', label: 'Oben links' },
+    { value: 'top-right', label: 'Oben rechts' },
+    { value: 'bottom-left', label: 'Unten links' },
+    { value: 'bottom-right', label: 'Unten rechts' }
+  ]
 }
 
 function findTool(tool: ToolId) {

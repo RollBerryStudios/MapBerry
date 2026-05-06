@@ -175,16 +175,49 @@ export interface PlayerTimerState {
   startedAt: number | null
 }
 
+export type PlayerOverlayAnchor =
+  | 'center'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+
+export type PlayerOverlayLayout = 'single' | 'mirror-x' | 'mirror-y'
+export type PlayerOverlayKind = 'notice' | 'timer' | 'handout'
+
+export interface PlayerOverlayPlacement {
+  anchor: PlayerOverlayAnchor
+  layout: PlayerOverlayLayout
+}
+
+export interface PlayerOverlaySettings {
+  notice: PlayerOverlayPlacement
+  timer: PlayerOverlayPlacement
+  handout: PlayerOverlayPlacement
+}
+
 export interface PlayerOverlayState {
   notice: PlayerNotice | null
   timer: PlayerTimerState | null
   activeHandoutId: string | null
+  settings: PlayerOverlaySettings
+}
+
+export const DEFAULT_PLAYER_OVERLAY_SETTINGS: PlayerOverlaySettings = {
+  notice: { anchor: 'top', layout: 'single' },
+  timer: { anchor: 'top-right', layout: 'single' },
+  handout: { anchor: 'center', layout: 'single' }
 }
 
 export const EMPTY_PLAYER_OVERLAY: PlayerOverlayState = {
   notice: null,
   timer: null,
-  activeHandoutId: null
+  activeHandoutId: null,
+  settings: DEFAULT_PLAYER_OVERLAY_SETTINGS
 }
 
 export interface DisplayInfo {

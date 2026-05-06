@@ -42,7 +42,7 @@ keine Charakterbögen, keine Kampagnenverwaltung. Nur Karte.
 - **Fog of War** - Pinsel, Rechteck, Polygon, alles aufdecken und alles verdecken
 - **Räume, Wände, Türen** - semantische Bereiche und einfache Strukturmarker
 - **Malen** - Freihand, Rechteck, Kreis, Text und Radierer mit klassischer Zeichenpalette
-- **Live-Spielerinfos** - Text-/Bild-Handouts, Hinweise, Alarme und Countdown-Timer direkt im Spielerfenster
+- **Live-Spielerinfos** - Text-/Bild-Handouts, Hinweise, Alarme und Countdown-Timer mit frei wählbarer Player-Position
 - **Local-first** - Karten und Szenendaten bleiben auf deinem Rechner
 
 Gebaut mit Electron, React, TypeScript, Vite, Konva und Playwright. Läuft auf
@@ -73,6 +73,7 @@ Playwright/Electron-Test-Suite für die wichtigsten Karten- und Live-Workflows.
 | **Zeichnungen** | Freihand, Rechteck, Kreis, Text und Radierer; optional für Spieler sichtbar |
 | **Toolbar** | Unten zentrierte Werkzeugleiste mit Untermenüs für Ansicht, Nebel, Malen, Räume und Grid |
 | **Live-Toolbar** | Text-/Bild-Handouts pro Karte, Nachrichten, Alarme und Timer als Overlays im Spielerfenster |
+| **Overlay-Layout** | Positionen in Mitte, Richtung oder Rand sowie beidseitige Spiegelung links/rechts oder oben/unten |
 | **Lokale Daten** | JSON-Library und importierte Karten im lokalen Electron-AppData-Verzeichnis |
 | **Sicherheit** | Lokale Assets werden über ein eingeschränktes `local-asset` Protokoll ausgeliefert |
 | **E2E-Tests** | Playwright/Electron prüft Import, Persistenz, Tools, Spielerfenster, Live-Overlays und Asset-Schutz |
@@ -114,7 +115,8 @@ npm run test:e2e:headed   # Gleiche Suite mit sichtbarem Fenster
 Die E2E-Suite startet MapBerry mit isolierten Testdaten und prüft
 Kartenimport, Demo-Map, Grid-Persistenz, Werkzeug-Interaktionen,
 Fog-of-War-Änderungen, Spielerfenster-Sync, Blackout, Player-Viewport,
-Text-/Bild-Handouts, Nachrichten, Alarme, Timer und Asset-Traversal-Schutz.
+Text-/Bild-Handouts, Nachrichten, Alarme, Timer, Overlay-Positionierung,
+beidseitige Spiegelung und Asset-Traversal-Schutz.
 
 ### Lokale Daten
 
@@ -186,7 +188,7 @@ suite. Just the map.
 - **Fog of War** - brush, rectangle, polygon, reveal all, and cover all
 - **Rooms, walls, doors** - semantic map areas and simple structure markers
 - **Drawing** - freehand, rectangle, circle, text, and eraser with a classic drawing palette
-- **Live player info** - text/image handouts, messages, alerts, and countdown timers in the player window
+- **Live player info** - text/image handouts, messages, alerts, and countdown timers with configurable player-window placement
 - **Local-first** - maps and scene data stay on your machine
 
 Built with Electron, React, TypeScript, Vite, Konva, and Playwright. Runs on
@@ -216,6 +218,7 @@ context menus, and a Playwright/Electron test suite for the core map and live wo
 | **Drawings** | Freehand, rectangle, circle, text, and eraser; optionally visible to players |
 | **Toolbar** | Bottom-centered toolbar with submenus for view, fog, drawing, rooms, and grid |
 | **Live Toolbar** | Per-map text/image handouts, messages, alerts, and timers as player-window overlays |
+| **Overlay Layout** | Center, directional, edge, and mirrored left/right or top/bottom placement |
 | **Local Data** | JSON library and imported maps in the local Electron app data folder |
 | **Security** | Local assets are served through a restricted `local-asset` protocol |
 | **E2E Tests** | Playwright/Electron covers import, persistence, tools, player window, live overlays, and asset protection |
@@ -257,7 +260,8 @@ npm run test:e2e:headed   # Same suite with a visible window
 The E2E suite launches MapBerry with isolated test data and validates map
 import, demo map creation, grid persistence, tool interactions, fog-of-war
 changes, player window sync, blackout, player viewport, text/image handouts,
-messages, alerts, timers, and asset traversal protection.
+messages, alerts, timers, overlay placement, mirrored layouts, and asset
+traversal protection.
 
 ### Local Data
 
