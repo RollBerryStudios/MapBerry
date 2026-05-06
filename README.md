@@ -5,7 +5,7 @@
 <h1 align="center">MapBerry</h1>
 
 <p align="center">
-  <strong>Lokale Karten-App fuer Pen-&amp;-Paper-Runden</strong><br>
+  <strong>Lokale Karten-App für Pen-&amp;-Paper-Runden</strong><br>
   <em>Local-first map table for tabletop RPG sessions</em>
 </p>
 
@@ -26,35 +26,35 @@
 
 ## Deutsch
 
-MapBerry ist eine **kostenlose, quelloffene Desktop-App fuer lokale Battlemap-
-und Tabletop-Kartensteuerung**. Sie ist fuer Spielleiter gebaut, die eine
-leichte Alternative zu grossen VTTs suchen: Karte laden, Raster einstellen,
-Fog of War steuern, Raeume markieren und die Spieleransicht auf einen zweiten
+MapBerry ist eine **kostenlose, quelloffene Desktop-App für lokale Battlemap-
+und Tabletop-Kartensteuerung**. Sie ist für Spielleiter gebaut, die eine
+leichte Alternative zu großen VTTs suchen: Karte laden, Raster einstellen,
+Fog of War steuern, Räume markieren und die Spieleransicht auf einen zweiten
 Bildschirm schicken.
 
 MapBerry nimmt die Kartenfunktionen aus BoltBerry und macht daraus ein
-eigenstaendiges, fokussiertes Werkzeug. Keine Token, keine Musik, kein Wiki,
-keine Charakterboegen, keine Kampagnenverwaltung. Nur Karte.
+eigenständiges, fokussiertes Werkzeug. Keine Token, keine Musik, kein Wiki,
+keine Charakterbögen, keine Kampagnenverwaltung. Nur Karte.
 
-- **DM-Fenster** - die Arbeitsansicht fuer Karte, Grid, Nebel, Raeume und Notizen
-- **Spielerfenster** - synchronisierte Kartenansicht fuer Beamer oder zweiten Monitor
-- **Grid-Werkzeuge** - Quadrat-/Hex-Raster, Groesse, Offset, Dicke, Sichtbarkeit und Schwarz/Weiss-Farbe
+- **DM-Fenster** - die Arbeitsansicht für Karte, Grid, Nebel, Räume und Notizen
+- **Spielerfenster** - synchronisierte Kartenansicht für Beamer oder zweiten Monitor
+- **Grid-Werkzeuge** - Quadrat-/Hex-Raster, Größe, Offset, Dicke, Sichtbarkeit und Schwarz/Weiß-Farbe
 - **Fog of War** - Pinsel, Rechteck, Polygon, alles aufdecken und alles verdecken
-- **Raeume, Waende, Tueren** - semantische Bereiche und einfache Strukturmarker
+- **Räume, Wände, Türen** - semantische Bereiche und einfache Strukturmarker
 - **Malen** - Freihand, Rechteck, Kreis, Text und Radierer mit klassischer Zeichenpalette
 - **Local-first** - Karten und Szenendaten bleiben auf deinem Rechner
 
-Gebaut mit Electron, React, TypeScript, Vite, Konva und Playwright. Laeuft auf
+Gebaut mit Electron, React, TypeScript, Vite, Konva und Playwright. Läuft auf
 macOS, Windows und Linux.
 
 ### Aktueller Stand
 
 Aktuelle Version: **0.1.0**
 
-MapBerry ist im initialen Stand als eigenstaendige Karten-App verfuegbar. Die
-App enthaelt ein Demo-Map-Asset, lokale Kartenimporte, DM-/Spielerfenster,
-eine unten zentrierte Werkzeugleiste mit Kontextmenues und eine
-Playwright/Electron-Test-Suite fuer die wichtigsten Karten-Workflows.
+MapBerry ist im initialen Stand als eigenständige Karten-App verfügbar. Die
+App enthält ein Demo-Map-Asset, lokale Kartenimporte, DM-/Spielerfenster,
+eine unten zentrierte Werkzeugleiste mit Kontextmenüs und eine
+Playwright/Electron-Test-Suite für die wichtigsten Karten-Workflows.
 
 ### Features
 
@@ -63,17 +63,17 @@ Playwright/Electron-Test-Suite fuer die wichtigsten Karten-Workflows.
 | **Kartenimport** | Lokale `.png`, `.jpg`, `.jpeg` und `.webp` Karten importieren |
 | **Demo Map** | Beim ersten Start wird eine Demo-Karte aus `resources/demo-map.png` angelegt |
 | **DM-Fenster** | Kartenverwaltung, Grid-Grunddaten, Werkzeugleiste und Objektlisten |
-| **Spielerfenster** | Separates Fenster fuer zweiten Monitor, Beamer oder Stream-Layout |
-| **Spielerrahmen** | Begrenzte Player-Ansicht mit Groessensteuerung, Rotation und Drag auf der Karte |
-| **Grid** | Quadrat oder Hex, Groesse, Offset X/Y, Dicke, Sichtbarkeit, Schwarz/Weiss-Farbe |
+| **Spielerfenster** | Separates Fenster für zweiten Monitor, Beamer oder Stream-Layout |
+| **Spielerrahmen** | Begrenzte Player-Ansicht mit Größensteuerung, Rotation und Drag auf der Karte |
+| **Grid** | Quadrat oder Hex, Größe, Offset X/Y, Dicke, Sichtbarkeit, Schwarz/Weiß-Farbe |
 | **Fog of War** | Aufdecken und Verdecken per Pinsel, Rechteck oder Polygon |
-| **Raeume** | Polygonraeume mit Sichtbarkeitsstatus und Notizen |
-| **Waende & Tueren** | Linienbasierte Strukturmarker fuer Kartenorganisation |
-| **Zeichnungen** | Freihand, Rechteck, Kreis, Text und Radierer; optional fuer Spieler sichtbar |
-| **Toolbar** | Unten zentrierte Werkzeugleiste mit Untermenues fuer Ansicht, Nebel, Malen, Raeume und Grid |
+| **Räume** | Polygonräume mit Sichtbarkeitsstatus und Notizen |
+| **Wände & Türen** | Linienbasierte Strukturmarker für Kartenorganisation |
+| **Zeichnungen** | Freihand, Rechteck, Kreis, Text und Radierer; optional für Spieler sichtbar |
+| **Toolbar** | Unten zentrierte Werkzeugleiste mit Untermenüs für Ansicht, Nebel, Malen, Räume und Grid |
 | **Lokale Daten** | JSON-Library und importierte Karten im lokalen Electron-AppData-Verzeichnis |
-| **Sicherheit** | Lokale Assets werden ueber ein eingeschraenktes `local-asset` Protokoll ausgeliefert |
-| **E2E-Tests** | Playwright/Electron prueft Import, Persistenz, Tools, Spielerfenster und Asset-Schutz |
+| **Sicherheit** | Lokale Assets werden über ein eingeschränktes `local-asset` Protokoll ausgeliefert |
+| **E2E-Tests** | Playwright/Electron prüft Import, Persistenz, Tools, Spielerfenster und Asset-Schutz |
 
 ### Schnellstart
 
@@ -90,28 +90,28 @@ npm run dev
 
 ```bash
 npm run build      # TypeScript + Preload + Renderer kompilieren
-npm run pack       # Entpacktes App-Verzeichnis fuer die aktuelle Plattform
-npm run dist       # Installer/Distributionspakete fuer die aktuelle Plattform
+npm run pack       # Entpacktes App-Verzeichnis für die aktuelle Plattform
+npm run dist       # Installer/Distributionspakete für die aktuelle Plattform
 ```
 
 Die Build-Konfiguration liegt in `electron-builder.yml`.
 
 | Plattform | Ziel |
 |---|---|
-| macOS | `.dmg` und `.zip` fuer x64/arm64 |
-| Windows | NSIS Installer fuer x64 |
-| Linux | `.AppImage` und `.deb` fuer x64 |
+| macOS | `.dmg` und `.zip` für x64/arm64 |
+| Windows | NSIS Installer für x64 |
+| Linux | `.AppImage` und `.deb` für x64 |
 
-### Qualitaetssicherung
+### Qualitätssicherung
 
 ```bash
 npm run test:e2e          # Build + Playwright/Electron E2E-Suite
 npm run test:e2e:headed   # Gleiche Suite mit sichtbarem Fenster
 ```
 
-Die E2E-Suite startet MapBerry mit isolierten Testdaten und prueft
+Die E2E-Suite startet MapBerry mit isolierten Testdaten und prüft
 Kartenimport, Demo-Map, Grid-Persistenz, Werkzeug-Interaktionen,
-Fog-of-War-Aenderungen, Spielerfenster-Sync, Blackout, Player-Viewport und
+Fog-of-War-Änderungen, Spielerfenster-Sync, Blackout, Player-Viewport und
 Asset-Traversal-Schutz.
 
 ### Lokale Daten
@@ -123,8 +123,8 @@ data/mapberry-library.json
 assets/maps/
 ```
 
-Die Library wird beim Laden normalisiert, damit aeltere oder beschaedigte Daten
-die Oberflaeche nicht brechen. Importierte Karten werden in den lokalen
+Die Library wird beim Laden normalisiert, damit ältere oder beschädigte Daten
+die Oberfläche nicht brechen. Importierte Karten werden in den lokalen
 App-Daten abgelegt und nicht aus ihrem Ursprungsordner referenziert.
 
 ### Projektstruktur
@@ -132,9 +132,9 @@ App-Daten abgelegt und nicht aus ihrem Ursprungsordner referenziert.
 ```text
 src/
   main.ts                 Electron Main-Prozess, Fenster, IPC und lokale Persistenz
-  preload/                Sichere Context Bridge fuer DM- und Player-APIs
-  renderer/               React/Konva-App fuer DM- und Spielerfenster
-    App.tsx               DM-Oberflaeche, Toolbar, Canvas und Sidepanels
+  preload/                Sichere Context Bridge für DM- und Player-APIs
+  renderer/               React/Konva-App für DM- und Spielerfenster
+    App.tsx               DM-Oberfläche, Toolbar, Canvas und Sidepanels
     PlayerApp.tsx         Spielerfenster-Rendering
     lib/                  Fog, Bilder, Geometrie und Karten-Helfer
   shared/                 Gemeinsame Typen und Grid-Helfer
@@ -147,19 +147,19 @@ resources/                Logo und Demo-Karte
 | Technologie | Verwendung |
 |---|---|
 | Electron 41 | Desktop-Shell, native Dialoge und zweites Fenster |
-| React 18 | Benutzeroberflaeche |
+| React 18 | Benutzeroberfläche |
 | TypeScript 5.9 | Typisierte App-Logik |
 | Vite 6 | Renderer-Bundling |
-| Konva / react-konva | Canvas-Rendering fuer Karte, Grid, Fog und Zeichnungen |
+| Konva / react-konva | Canvas-Rendering für Karte, Grid, Fog und Zeichnungen |
 | Playwright | Electron E2E-Tests |
-| electron-builder | Packaging fuer macOS, Windows und Linux |
+| electron-builder | Packaging für macOS, Windows und Linux |
 
 ### Beziehung zu BoltBerry
 
-MapBerry ist kein Ersatz fuer BoltBerry als vollstaendiges VTT. Es ist die
-leichte Karten-Variante fuer Gruppen, die keine Tokenverwaltung, Musik,
-Kompendien oder Charakterboegen brauchen. Wer den kompletten Werkzeugkasten
-moechte, nutzt [BoltBerry](https://github.com/RollBerryStudios/BoltBerry).
+MapBerry ist kein Ersatz für BoltBerry als vollständiges VTT. Es ist die
+leichte Karten-Variante für Gruppen, die keine Tokenverwaltung, Musik,
+Kompendien oder Charakterbögen brauchen. Wer den kompletten Werkzeugkasten
+möchte, nutzt [BoltBerry](https://github.com/RollBerryStudios/BoltBerry).
 
 ### Lizenz
 
