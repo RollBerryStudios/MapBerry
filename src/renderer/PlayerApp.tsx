@@ -4,6 +4,7 @@ import logoUrl from './assets/MapBerry.png'
 import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerPointer, PlayerViewport, RoomRecord, WallRecord } from '../shared/mapberry'
 import { normalizeGridColor } from '../shared/mapberry'
 import { useAssetImage } from './lib/image'
+import { ROOM_STROKE, TOOL_PREVIEW_STROKE, WALL_STROKE, drawingStroke, screenDash, screenPx } from './lib/canvasStrokes'
 import { distance, flattened, polygonCenter, rectFromPoints } from './lib/mapMath'
 import './styles.css'
 
@@ -113,13 +114,13 @@ function PlayerMap({
             rotation={view.rotation}
           >
             {image && <KonvaImage image={image} width={width} height={height} listening={false} />}
-            <Grid map={map} />
-            {map.rooms.filter((room) => room.visibility !== 'hidden').map((room) => <RoomShape key={room.id} room={room} />)}
-            {map.drawings.filter((drawing) => drawing.visibleToPlayers).map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} />)}
-            {map.walls.filter((wall) => wall.kind === 'door' && wall.doorState === 'open').map((wall) => <DoorHint key={wall.id} wall={wall} />)}
+            <Grid map={map} scale={view.scale} />
+            {map.rooms.filter((room) => room.visibility !== 'hidden').map((room) => <RoomShape key={room.id} room={room} scale={view.scale} />)}
+            {map.drawings.filter((drawing) => drawing.visibleToPlayers).map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} scale={view.scale} />)}
+            {map.walls.filter((wall) => wall.kind === 'door' && wall.doorState === 'open').map((wall) => <DoorHint key={wall.id} wall={wall} scale={view.scale} />)}
             {fogImage && <KonvaImage image={fogImage} width={width} height={height} opacity={1} listening={false} />}
-            {measure && <MeasureShape measure={measure} gridSize={map.gridSize} />}
-            {pointer && <PointerShape pointer={pointer} />}
+            {measure && <MeasureShape measure={measure} scale={view.scale} />}
+            {pointer && <PointerShape pointer={pointer} scale={view.scale} />}
           </Group>
         </Layer>
       </Stage>
@@ -151,7 +152,7 @@ function getPlayerTransform(map: MapScene, viewport: PlayerViewport | null, stag
   }
 }
 
-function Grid({ map }: { map: MapScene }) {
+function Grid({ map, scale }: { map: MapScene; scale: number }) {
   if (map.gridType === 'none' || !map.gridVisible || map.gridSize <= 0) return null
   return (
     <Shape
@@ -164,7 +165,7 @@ function Grid({ map }: { map: MapScene }) {
         ctx.rect(0, 0, w, h)
         ctx.clip()
         ctx.strokeStyle = normalizeGridColor(map.gridColor)
-        ctx.lineWidth = map.gridThickness
+        ctx.lineWidth = screenPx(map.gridThickness, scale)
         if (map.gridType === 'square') {
           const firstX = ((map.gridOffsetX % map.gridSize) + map.gridSize) % map.gridSize
           const firstY = ((map.gridOffsetY % map.gridSize) + map.gridSize) % map.gridSize
@@ -208,56 +209,57 @@ function Grid({ map }: { map: MapScene }) {
   )
 }
 
-function RoomShape({ room }: { room: RoomRecord }) {
+function RoomShape({ room, scale }: { room: RoomRecord; scale: number }) {
   const center = polygonCenter(room.polygon)
   const fill = room.visibility === 'revealed' ? `${room.color}18` : `${room.color}0f`
   return (
     <Group listening={false}>
-      <Line points={flattened(room.polygon)} closed fill={fill} stroke={room.color} strokeWidth={room.visibility === 'revealed' ? 2 : 1} opacity={0.58} />
-      {room.visibility === 'revealed' && <Text x={center.x - 60} y={center.y - 9} text={room.name} width={120} align="center" fill="#fff1c8" fontSize={17} opacity={0.7} />}
+      <Line points={flattened(room.polygon)} closed fill={fill} stroke={room.color} strokeWidth={screenPx(ROOM_STROKE, scale)} opacity={0.58} />
+      {room.visibility === 'revealed' && <Text x={center.x - screenPx(60, scale)} y={center.y - screenPx(9, scale)} text={room.name} width={screenPx(120, scale)} align="center" fill="#fff1c8" fontSize={screenPx(14, scale)} opacity={0.7} />}
     </Group>
   )
 }
 
-function DrawingShape({ drawing }: { drawing: DrawingRecord }) {
-  if (drawing.type === 'freehand') return <Line points={drawing.points} stroke={drawing.color} strokeWidth={drawing.width} lineCap="round" lineJoin="round" listening={false} />
-  if (drawing.type === 'rect') return <Rect {...rectFromPoints(drawing.points)} stroke={drawing.color} strokeWidth={drawing.width} listening={false} />
+function DrawingShape({ drawing, scale }: { drawing: DrawingRecord; scale: number }) {
+  const strokeWidth = drawingStroke(drawing.width, scale)
+  if (drawing.type === 'freehand') return <Line points={drawing.points} stroke={drawing.color} strokeWidth={strokeWidth} lineCap="round" lineJoin="round" listening={false} />
+  if (drawing.type === 'rect') return <Rect {...rectFromPoints(drawing.points)} stroke={drawing.color} strokeWidth={strokeWidth} listening={false} />
   if (drawing.type === 'circle') {
     const [x1 = 0, y1 = 0, x2 = x1, y2 = y1] = drawing.points
-    return <Circle x={x1} y={y1} radius={Math.hypot(x2 - x1, y2 - y1)} stroke={drawing.color} strokeWidth={drawing.width} listening={false} />
+    return <Circle x={x1} y={y1} radius={Math.hypot(x2 - x1, y2 - y1)} stroke={drawing.color} strokeWidth={strokeWidth} listening={false} />
   }
   return <Text x={drawing.points[0] ?? 0} y={drawing.points[1] ?? 0} text={drawing.text ?? ''} fontSize={26} fill={drawing.color} listening={false} />
 }
 
-function DoorHint({ wall }: { wall: WallRecord }) {
-  return <Line points={[wall.x1, wall.y1, wall.x2, wall.y2]} stroke={LEAF} strokeWidth={5} dash={[14, 10]} opacity={0.5} lineCap="round" listening={false} />
+function DoorHint({ wall, scale }: { wall: WallRecord; scale: number }) {
+  return <Line points={[wall.x1, wall.y1, wall.x2, wall.y2]} stroke={LEAF} strokeWidth={screenPx(WALL_STROKE, scale)} dash={screenDash([10, 8], scale)} opacity={0.5} lineCap="round" listening={false} />
 }
 
-function PointerShape({ pointer }: { pointer: PlayerPointer }) {
+function PointerShape({ pointer, scale }: { pointer: PlayerPointer; scale: number }) {
   return (
     <Group listening={false}>
-      <Circle x={pointer.x} y={pointer.y} radius={34} stroke={GOLD} strokeWidth={7} opacity={0.92} />
-      <Circle x={pointer.x} y={pointer.y} radius={13} fill={BERRY} stroke="#f7f1cf" strokeWidth={4} />
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(28, scale)} stroke={GOLD} strokeWidth={screenPx(4, scale)} opacity={0.92} />
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(10, scale)} fill={BERRY} stroke="#f7f1cf" strokeWidth={screenPx(3, scale)} />
     </Group>
   )
 }
 
-function MeasureShape({ measure, gridSize }: { measure: PlayerMeasure; gridSize: number }) {
+function MeasureShape({ measure, scale }: { measure: PlayerMeasure; scale: number }) {
   const start = { x: measure.startX, y: measure.startY }
   const end = { x: measure.endX, y: measure.endY }
   const label = `${measure.distance} ft`
   if (measure.type === 'circle') {
     return (
       <Group listening={false}>
-        <Circle x={start.x} y={start.y} radius={distance(start, end)} stroke={GOLD} strokeWidth={4} dash={[14, 10]} opacity={0.88} />
-        <Text x={end.x + gridSize * 0.2} y={end.y + gridSize * 0.2} text={label} fill={GOLD} fontSize={20} />
+        <Circle x={start.x} y={start.y} radius={distance(start, end)} stroke={GOLD} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={screenDash([10, 8], scale)} opacity={0.88} />
+        <Text x={end.x + screenPx(12, scale)} y={end.y + screenPx(12, scale)} text={label} fill={GOLD} fontSize={screenPx(14, scale)} />
       </Group>
     )
   }
   return (
     <Group listening={false}>
-      <Line points={[measure.startX, measure.startY, measure.endX, measure.endY]} stroke={GOLD} strokeWidth={4} dash={[14, 10]} lineCap="round" />
-      <Text x={(measure.startX + measure.endX) / 2 + 12} y={(measure.startY + measure.endY) / 2 + 12} text={label} fill={GOLD} fontSize={20} />
+      <Line points={[measure.startX, measure.startY, measure.endX, measure.endY]} stroke={GOLD} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={screenDash([10, 8], scale)} lineCap="round" />
+      <Text x={(measure.startX + measure.endX) / 2 + screenPx(12, scale)} y={(measure.startY + measure.endY) / 2 + screenPx(12, scale)} text={label} fill={GOLD} fontSize={screenPx(14, scale)} />
     </Group>
   )
 }

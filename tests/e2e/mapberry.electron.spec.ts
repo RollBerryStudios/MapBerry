@@ -190,6 +190,10 @@ test.describe('MapBerry Electron map workflow', () => {
       await page.keyboard.press('Enter')
       await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.rooms.length ?? 0).toBe(1)
       await expect(page.getByRole('button', { name: /Raum 1/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /Raum 1/ })).toHaveClass(/active/)
+      await expect(page.getByRole('button', { name: /Wand 1/ })).not.toHaveClass(/active/)
+      await expect(page.getByRole('button', { name: /Rechteck 1/ })).not.toHaveClass(/active/)
+      await expect(page).toHaveScreenshot('mapberry-room-line-tooling.png', { fullPage: true })
 
       await page.getByTestId('fog-cover-all').click()
       await expect.poll(async () => Boolean(mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap)).toBe(true)

@@ -61,6 +61,17 @@ Die Light-Variante wird nur über `[data-theme="light"]` aktiviert. Dark bleibt 
 - Floating Fog Controls dürfen umbrechen und müssen innerhalb des Canvas bleiben.
 - Tool-Popovers dürfen nicht außerhalb der sichtbaren Fläche abgeschnitten werden.
 
+## Canvas-Linienstärken
+
+- Räume werden wie in BoltBerry polygonal gesetzt: Klick fügt einen gerundeten Punkt hinzu, die Vorschaukante folgt der Maus, der Pfad schließt visuell zum Startpunkt, Enter oder Doppelklick finalisiert, Escape bricht ab.
+- Raumkonturen bleiben zoomunabhängig: 1.5 px normal, 2 px ausgewählt, 2 px in der Vorschau, mit sichtbaren Vertex-Markern.
+- Wände und Türen bleiben zoomunabhängig bei 4 px; offene Türen verwenden eine fein gestrichelte Linie.
+- Fog-, Mess- und Struktur-Vorschauen bleiben zoomunabhängig bei 2 px.
+- Grid-Stärke ist ein Screen-Pixel-Wert und darf beim Zoomen nicht sichtbar anwachsen.
+- Freie Zeichnungen, Rechtecke und Kreise behalten die vom Nutzer gewählte Stärke, werden aber visuell auf 1.5 bis 12 Screen-Pixel begrenzt, damit hohe Zoomstufen keine Inhalte verdecken.
+- Host-Canvas und Player-Window müssen dieselben Strichstärkenregeln verwenden.
+- Es darf immer nur eine Canvas-Entität aktiv ausgewählt sein: Raum, Wand oder Zeichnung. Eine neue Auswahl hebt die vorherige Kategorieauswahl auf.
+
 ## Settings
 
 Pflichtinhalte:

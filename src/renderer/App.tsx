@@ -52,6 +52,17 @@ import type {
 import { gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
 import { useAssetImage } from './lib/image'
 import { applyFogOp, createFogCanvas, type FogOp } from './lib/fog'
+import {
+  PLAYER_VIEWPORT_STROKE,
+  ROOM_PREVIEW_STROKE,
+  ROOM_SELECTED_STROKE,
+  ROOM_STROKE,
+  TOOL_PREVIEW_STROKE,
+  WALL_STROKE,
+  drawingStroke,
+  screenDash,
+  screenPx
+} from './lib/canvasStrokes'
 import { distance, flattened, polygonCenter, rectFromPoints, screenToMap, uid } from './lib/mapMath'
 import { COPY, type Locale, type Theme } from './i18n'
 import './styles.css'
@@ -178,6 +189,30 @@ export function App() {
       return next
     })
   }, [blackout, playerViewport])
+
+  const selectRoom = useCallback((id: string | null) => {
+    setSelectedRoomId(id)
+    if (id) {
+      setSelectedWallId(null)
+      setSelectedDrawingId(null)
+    }
+  }, [])
+
+  const selectWall = useCallback((id: string | null) => {
+    setSelectedWallId(id)
+    if (id) {
+      setSelectedRoomId(null)
+      setSelectedDrawingId(null)
+    }
+  }, [])
+
+  const selectDrawing = useCallback((id: string | null) => {
+    setSelectedDrawingId(id)
+    if (id) {
+      setSelectedRoomId(null)
+      setSelectedWallId(null)
+    }
+  }, [])
 
   useEffect(() => {
     latestSyncRef.current = { map: activeMap, blackout, viewport: playerViewport }
@@ -422,9 +457,9 @@ export function App() {
                 onViewportChange={setPlayerViewport}
                 onMapPatch={patchActiveMap}
                 onMapUpdate={updateActiveMap}
-                onRoomSelect={setSelectedRoomId}
-                onWallSelect={setSelectedWallId}
-                onDrawingSelect={setSelectedDrawingId}
+                onRoomSelect={selectRoom}
+                onWallSelect={selectWall}
+                onDrawingSelect={selectDrawing}
               />
               <ToolDock
                 tool={tool}
@@ -469,9 +504,9 @@ export function App() {
               selectedWallId={selectedWallId}
               selectedDrawingId={selectedDrawingId}
               onMapUpdate={updateActiveMap}
-              onRoomSelect={setSelectedRoomId}
-              onWallSelect={setSelectedWallId}
-              onDrawingSelect={setSelectedDrawingId}
+              onRoomSelect={selectRoom}
+              onWallSelect={selectWall}
+              onDrawingSelect={selectDrawing}
             />
           )}
         </aside>
@@ -835,6 +870,7 @@ function MapCanvas({
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null)
   const [path, setPath] = useState<number[]>([])
   const [roomPoints, setRoomPoints] = useState<Array<{ x: number; y: number }>>([])
+  const [polygonPreviewPoint, setPolygonPreviewPoint] = useState<{ x: number; y: number } | null>(null)
   const [fogCanvas, setFogCanvas] = useState<HTMLCanvasElement | null>(null)
   const [fogVersion, setFogVersion] = useState(0)
   const [measure, setMeasure] = useState<PlayerMeasure | null>(null)
@@ -880,6 +916,7 @@ function MapCanvas({
       if (event.key === 'Enter' && roomPoints.length >= 3) finishRoom()
       if (event.key === 'Escape') {
         setRoomPoints([])
+        setPolygonPreviewPoint(null)
         setPath([])
         setDragStart(null)
         setDragCurrent(null)
@@ -939,7 +976,8 @@ function MapCanvas({
       return
     }
     if (tool === 'room' || tool === 'fog-polygon') {
-      setRoomPoints((points) => [...points, pos])
+      setRoomPoints((points) => [...points, { x: Math.round(pos.x), y: Math.round(pos.y) }])
+      setPolygonPreviewPoint(null)
       return
     }
     setDragStart(pos)
@@ -960,6 +998,9 @@ function MapCanvas({
         offsetY: isPanning.oy + event.evt.clientY - isPanning.y
       }))
       return
+    }
+    if ((tool === 'room' || tool === 'fog-polygon') && roomPoints.length > 0) {
+      setPolygonPreviewPoint({ x: Math.round(pos.x), y: Math.round(pos.y) })
     }
     if (!dragStart) return
     setDragCurrent(pos)
@@ -1009,6 +1050,7 @@ function MapCanvas({
     if (tool === 'fog-polygon' && roomPoints.length >= 3) {
       applyFog({ mode: 'reveal', shape: 'polygon', points: flattened(roomPoints) }, true)
       setRoomPoints([])
+      setPolygonPreviewPoint(null)
     }
   }
 
@@ -1025,6 +1067,7 @@ function MapCanvas({
     onMapUpdate((scene) => ({ ...scene, rooms: [...scene.rooms, room], updatedAt: new Date().toISOString() }))
     onRoomSelect(room.id)
     setRoomPoints([])
+    setPolygonPreviewPoint(null)
   }
 
   function addDrawing(drawing: DrawingRecord) {
@@ -1071,15 +1114,16 @@ function MapCanvas({
         <Layer>
           <Group x={transform.offsetX} y={transform.offsetY} scaleX={transform.scale} scaleY={transform.scale}>
             {image && <KonvaImage image={image} width={map.width || imageSize.width} height={map.height || imageSize.height} />}
-            <Grid map={map} />
-            {map.rooms.map((room) => <RoomShape key={room.id} room={room} selected={room.id === selectedRoomId} onSelect={() => onRoomSelect(room.id)} />)}
-            {map.walls.map((wall) => <WallShape key={wall.id} wall={wall} selected={wall.id === selectedWallId} onSelect={() => onWallSelect(wall.id)} />)}
-            {map.drawings.map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} selected={drawing.id === selectedDrawingId} onSelect={() => onDrawingSelect(drawing.id)} />)}
+            <Grid map={map} scale={transform.scale} />
+            {map.rooms.map((room) => <RoomShape key={room.id} room={room} selected={room.id === selectedRoomId} scale={transform.scale} onSelect={() => onRoomSelect(room.id)} />)}
+            {map.walls.map((wall) => <WallShape key={wall.id} wall={wall} selected={wall.id === selectedWallId} scale={transform.scale} onSelect={() => onWallSelect(wall.id)} />)}
+            {map.drawings.map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} selected={drawing.id === selectedDrawingId} scale={transform.scale} onSelect={() => onDrawingSelect(drawing.id)} />)}
             {fogCanvas && <KonvaImage key={fogVersion} image={fogCanvas} width={fogCanvas.width} height={fogCanvas.height} opacity={0.48} listening={false} />}
-            {roomPoints.length > 0 && <Line points={flattened(roomPoints)} stroke={LEAF} strokeWidth={3 / transform.scale} dash={[12 / transform.scale, 8 / transform.scale]} closed={false} />}
-            {previewPoints.length > 0 && <Preview tool={tool} points={previewPoints} color={drawColor} width={drawWidth} />}
-            {playerViewport && <PlayerViewportFrame viewport={playerViewport} onChange={onViewportChange} />}
-            {pointer && <Circle x={pointer.x} y={pointer.y} radius={28 / transform.scale} stroke={GOLD} strokeWidth={4 / transform.scale} />}
+            {tool === 'draw-freehand' && path.length >= 4 && <Line points={path} stroke={drawColor} strokeWidth={drawingStroke(drawWidth, transform.scale)} lineCap="round" lineJoin="round" listening={false} />}
+            {roomPoints.length > 0 && <PolygonDraft points={roomPoints} previewPoint={polygonPreviewPoint} scale={transform.scale} tool={tool} />}
+            {previewPoints.length > 0 && <Preview tool={tool} points={previewPoints} color={drawColor} width={drawWidth} scale={transform.scale} />}
+            {playerViewport && <PlayerViewportFrame viewport={playerViewport} scale={transform.scale} onChange={onViewportChange} />}
+            {pointer && <Circle x={pointer.x} y={pointer.y} radius={screenPx(28, transform.scale)} stroke={GOLD} strokeWidth={screenPx(4, transform.scale)} />}
           </Group>
         </Layer>
       </Stage>
@@ -1113,7 +1157,7 @@ function MapCanvas({
   )
 }
 
-function Grid({ map }: { map: MapScene }) {
+function Grid({ map, scale }: { map: MapScene; scale: number }) {
   if (map.gridType === 'none' || !map.gridVisible || map.gridSize <= 0) return null
   return (
     <Shape
@@ -1126,7 +1170,7 @@ function Grid({ map }: { map: MapScene }) {
         ctx.rect(0, 0, w, h)
         ctx.clip()
         ctx.strokeStyle = normalizeGridColor(map.gridColor)
-        ctx.lineWidth = map.gridThickness
+        ctx.lineWidth = screenPx(map.gridThickness, scale)
         if (map.gridType === 'square') {
           const firstX = ((map.gridOffsetX % map.gridSize) + map.gridSize) % map.gridSize
           const firstY = ((map.gridOffsetY % map.gridSize) + map.gridSize) % map.gridSize
@@ -1170,61 +1214,130 @@ function Grid({ map }: { map: MapScene }) {
   )
 }
 
-function RoomShape({ room, selected, onSelect }: { room: RoomRecord; selected: boolean; onSelect: () => void }) {
+function PolygonDraft({
+  points,
+  previewPoint,
+  scale,
+  tool
+}: {
+  points: Array<{ x: number; y: number }>
+  previewPoint: { x: number; y: number } | null
+  scale: number
+  tool: ToolId
+}) {
+  const stroke = tool === 'fog-polygon' ? '#34c759' : GOLD
+  const displayPoints = [
+    ...points,
+    ...(previewPoint ? [previewPoint] : []),
+    points[0],
+  ]
+  return (
+    <>
+      <Line
+        points={flattened(displayPoints)}
+        stroke={stroke}
+        strokeWidth={screenPx(ROOM_PREVIEW_STROKE, scale)}
+        dash={screenDash([4, 4], scale)}
+        closed={false}
+        listening={false}
+      />
+      {points.map((point, index) => (
+        <Circle
+          key={`${point.x}:${point.y}:${index}`}
+          x={point.x}
+          y={point.y}
+          radius={screenPx(index === 0 ? 5 : 4, scale)}
+          fill={index === 0 ? stroke : '#ffffff'}
+          stroke={stroke}
+          strokeWidth={screenPx(1, scale)}
+          listening={false}
+        />
+      ))}
+    </>
+  )
+}
+
+function RoomShape({ room, selected, scale, onSelect }: { room: RoomRecord; selected: boolean; scale: number; onSelect: () => void }) {
   const points = flattened(room.polygon)
   const center = polygonCenter(room.polygon)
   const stroke = selected ? GOLD : room.color
   const fill = room.visibility === 'revealed' ? `${room.color}33` : room.visibility === 'dimmed' ? `${room.color}20` : `${room.color}12`
   return (
     <Group onClick={onSelect}>
-      <Line points={points} closed fill={fill} stroke={stroke} strokeWidth={selected ? 4 : 2} />
-      <Text x={center.x - 46} y={center.y - 10} text={room.name} fill="#fff1c8" fontSize={18} width={92} align="center" listening={false} />
+      <Line
+        points={points}
+        closed
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={screenPx(selected ? ROOM_SELECTED_STROKE : ROOM_STROKE, scale)}
+        dash={selected ? undefined : screenDash([6, 4], scale)}
+        hitStrokeWidth={screenPx(14, scale)}
+      />
+      <Text
+        x={center.x - screenPx(60, scale)}
+        y={center.y - screenPx(8, scale)}
+        text={room.name}
+        fill={stroke}
+        fontSize={screenPx(14, scale)}
+        fontStyle="bold"
+        width={screenPx(120, scale)}
+        align="center"
+        listening={false}
+      />
     </Group>
   )
 }
 
-function WallShape({ wall, selected, onSelect }: { wall: WallRecord; selected: boolean; onSelect: () => void }) {
+function WallShape({ wall, selected, scale, onSelect }: { wall: WallRecord; selected: boolean; scale: number; onSelect: () => void }) {
   const color = selected ? GOLD : wall.kind === 'door' ? '#d47b1f' : '#f7f1cf'
   return (
     <Line
       points={[wall.x1, wall.y1, wall.x2, wall.y2]}
       stroke={color}
-      strokeWidth={wall.kind === 'door' ? 7 : 4}
-      dash={wall.kind === 'door' && wall.doorState === 'open' ? [12, 8] : undefined}
-      hitStrokeWidth={18}
+      strokeWidth={screenPx(WALL_STROKE, scale)}
+      dash={wall.kind === 'door' && wall.doorState === 'open' ? screenDash([12, 8], scale) : undefined}
+      hitStrokeWidth={screenPx(18, scale)}
       lineCap="round"
       onClick={onSelect}
     />
   )
 }
 
-function DrawingShape({ drawing, selected, onSelect }: { drawing: DrawingRecord; selected: boolean; onSelect: () => void }) {
+function DrawingShape({ drawing, selected, scale, onSelect }: { drawing: DrawingRecord; selected: boolean; scale: number; onSelect: () => void }) {
   const stroke = selected ? GOLD : drawing.color
-  if (drawing.type === 'freehand') return <Line points={drawing.points} stroke={stroke} strokeWidth={drawing.width} lineCap="round" lineJoin="round" hitStrokeWidth={16} onClick={onSelect} />
+  const strokeWidth = drawingStroke(drawing.width, scale)
+  const hitStrokeWidth = Math.max(screenPx(16, scale), strokeWidth + screenPx(8, scale))
+  if (drawing.type === 'freehand') return <Line points={drawing.points} stroke={stroke} strokeWidth={strokeWidth} lineCap="round" lineJoin="round" hitStrokeWidth={hitStrokeWidth} onClick={onSelect} />
   if (drawing.type === 'rect') {
     const rect = rectFromPoints(drawing.points)
-    return <Rect {...rect} stroke={stroke} strokeWidth={drawing.width} onClick={onSelect} />
+    return <Rect {...rect} stroke={stroke} strokeWidth={strokeWidth} hitStrokeWidth={hitStrokeWidth} onClick={onSelect} />
   }
   if (drawing.type === 'circle') {
     const [x1 = 0, y1 = 0, x2 = x1, y2 = y1] = drawing.points
-    return <Circle x={x1} y={y1} radius={Math.hypot(x2 - x1, y2 - y1)} stroke={stroke} strokeWidth={drawing.width} onClick={onSelect} />
+    return <Circle x={x1} y={y1} radius={Math.hypot(x2 - x1, y2 - y1)} stroke={stroke} strokeWidth={strokeWidth} hitStrokeWidth={hitStrokeWidth} onClick={onSelect} />
   }
   return <Text x={drawing.points[0] ?? 0} y={drawing.points[1] ?? 0} text={drawing.text ?? ''} fontSize={26} fill={stroke} onClick={onSelect} />
 }
 
-function Preview({ tool, points, color, width }: { tool: ToolId; points: number[]; color: string; width: number }) {
+function Preview({ tool, points, color, width, scale }: { tool: ToolId; points: number[]; color: string; width: number; scale: number }) {
   const rect = rectFromPoints(points)
-  if (tool === 'draw-rect' || tool === 'fog-rect' || tool === 'fog-cover') return <Rect {...rect} stroke={color} strokeWidth={width} dash={[10, 6]} listening={false} />
-  if (tool === 'draw-circle' || tool === 'measure-circle') return <Circle x={points[0]} y={points[1]} radius={Math.hypot(points[2] - points[0], points[3] - points[1])} stroke={color} strokeWidth={width} dash={[10, 6]} listening={false} />
-  if (tool === 'wall' || tool === 'door' || tool === 'measure-line') return <Line points={points} stroke={color} strokeWidth={width} dash={[10, 6]} listening={false} />
+  const dash = screenDash([6, 4], scale)
+  const drawDash = screenDash([10, 6], scale)
+  const drawingPreviewStroke = drawingStroke(width, scale)
+  if (tool === 'draw-rect') return <Rect {...rect} stroke={color} strokeWidth={drawingPreviewStroke} dash={drawDash} listening={false} />
+  if (tool === 'fog-rect' || tool === 'fog-cover') return <Rect {...rect} stroke={tool === 'fog-cover' ? '#ff453a' : '#34c759'} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={dash} listening={false} />
+  if (tool === 'draw-circle') return <Circle x={points[0]} y={points[1]} radius={Math.hypot(points[2] - points[0], points[3] - points[1])} stroke={color} strokeWidth={drawingPreviewStroke} dash={drawDash} listening={false} />
+  if (tool === 'measure-circle') return <Circle x={points[0]} y={points[1]} radius={Math.hypot(points[2] - points[0], points[3] - points[1])} stroke={LEAF} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={dash} listening={false} />
+  if (tool === 'measure-line') return <Line points={points} stroke={GOLD} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={dash} listening={false} />
+  if (tool === 'wall' || tool === 'door') return <Line points={points} stroke={tool === 'door' ? '#d47b1f' : '#f7f1cf'} strokeWidth={screenPx(WALL_STROKE, scale)} dash={screenDash([6, 3], scale)} listening={false} />
   return null
 }
 
-function PlayerViewportFrame({ viewport, onChange }: { viewport: PlayerViewport; onChange: (viewport: PlayerViewport | null) => void }) {
+function PlayerViewportFrame({ viewport, scale, onChange }: { viewport: PlayerViewport; scale: number; onChange: (viewport: PlayerViewport | null) => void }) {
   return (
     <Group x={viewport.cx} y={viewport.cy} rotation={viewport.rotation} draggable onDragEnd={(event) => onChange({ ...viewport, cx: event.target.x(), cy: event.target.y() })}>
-      <Rect x={-viewport.w / 2} y={-viewport.h / 2} width={viewport.w} height={viewport.h} stroke={GOLD} strokeWidth={5} dash={[18, 10]} fill="rgba(241,189,97,0.08)" />
-      <Text x={-viewport.w / 2 + 14} y={-viewport.h / 2 + 12} text="Spieler" fill={GOLD} fontSize={22} />
+      <Rect x={-viewport.w / 2} y={-viewport.h / 2} width={viewport.w} height={viewport.h} stroke={GOLD} strokeWidth={screenPx(PLAYER_VIEWPORT_STROKE, scale)} dash={screenDash([14, 8], scale)} fill="rgba(241,189,97,0.08)" />
+      <Text x={-viewport.w / 2 + screenPx(14, scale)} y={-viewport.h / 2 + screenPx(12, scale)} text="Spieler" fill={GOLD} fontSize={screenPx(14, scale)} />
     </Group>
   )
 }
