@@ -75,6 +75,7 @@ const GITHUB_URL = 'https://github.com/RollBerryStudios/MapBerry'
 const ROLLBERRY_URL = 'https://github.com/RollBerryStudios'
 const CONTACT_EMAIL = 'kontakt@rollberry.de'
 const CONTACT_URL = `mailto:${CONTACT_EMAIL}`
+const RENDERER_PLATFORM = getRendererPlatform()
 
 const DRAW_COLOR_SWATCHES = [
   { id: 'black', name: 'Schwarz', value: '#111111' },
@@ -132,7 +133,7 @@ export function App() {
   const [ready, setReady] = useState(false)
   const [tool, setTool] = useState<ToolId>('select')
   const [drawColor, setDrawColor] = useState(DEFAULT_DRAW_COLOR)
-  const [drawWidth, setDrawWidth] = useState(4)
+  const [drawWidth, setDrawWidth] = useState(3)
   const [fogBrushRadius, setFogBrushRadius] = useState(44)
   const [blackout, setBlackout] = useState(false)
   const [playerOpen, setPlayerOpen] = useState(false)
@@ -321,7 +322,7 @@ export function App() {
   const ActiveToolIcon = findTool(tool)?.icon ?? MousePointer2
 
   return (
-    <div className="app-shell" data-theme={theme} data-testid="dm-app">
+    <div className="app-shell" data-theme={theme} data-platform={RENDERER_PLATFORM} data-testid="dm-app">
       <header className="titlebar">
         <div className="brand">
           <img src={logoUrl} alt="" />
@@ -775,7 +776,7 @@ function DrawSettingsPopover({
         <input
           type="range"
           min="1"
-          max="18"
+          max="6"
           step="1"
           value={width}
           aria-label="Strichstärke"
@@ -1514,6 +1515,13 @@ function sendFullSync(map: MapScene | null, blackout: boolean, viewport: PlayerV
 
 function toolLabel(tool: ToolId) {
   return findTool(tool)?.label ?? tool
+}
+
+function getRendererPlatform(): 'darwin' | 'win32' | 'linux' {
+  const platform = navigator.platform.toLowerCase()
+  if (platform.includes('mac')) return 'darwin'
+  if (platform.includes('win')) return 'win32'
+  return 'linux'
 }
 
 function roomVisibilityLabel(visibility: RoomRecord['visibility']) {

@@ -6,7 +6,7 @@ export const TOOL_PREVIEW_STROKE = 2
 export const PLAYER_VIEWPORT_STROKE = 2
 
 const DRAWING_MIN_SCREEN_STROKE = 1.5
-const DRAWING_MAX_SCREEN_STROKE = 12
+const DRAWING_MAX_SCREEN_STROKE = 6
 
 function safeScale(scale: number) {
   return Number.isFinite(scale) && scale > 0 ? scale : 1
@@ -22,6 +22,6 @@ export function screenDash(values: number[], scale: number) {
 
 export function drawingStroke(width: number, scale: number) {
   const requested = Number.isFinite(width) ? Math.max(1, width) : 1
-  const screenWidth = Math.max(DRAWING_MIN_SCREEN_STROKE, Math.min(DRAWING_MAX_SCREEN_STROKE, requested * safeScale(scale)))
+  const screenWidth = Math.max(DRAWING_MIN_SCREEN_STROKE, Math.min(DRAWING_MAX_SCREEN_STROKE, requested))
   return screenPx(screenWidth, scale)
 }

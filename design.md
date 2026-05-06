@@ -60,6 +60,7 @@ Die Light-Variante wird nur über `[data-theme="light"]` aktiviert. Dark bleibt 
 - Topbar darf umbrechen, aber keine Buttons überdecken.
 - Floating Fog Controls dürfen umbrechen und müssen innerhalb des Canvas bleiben.
 - Tool-Popovers dürfen nicht außerhalb der sichtbaren Fläche abgeschnitten werden.
+- Native Window Controls dürfen niemals Logo, Brand-Text oder App-Actions überdecken. Auf macOS beginnt der Brand-Bereich erst nach dem Traffic-Light-Inset; auf Windows/Linux bleibt rechts Platz für die Overlay-Controls.
 
 ## Canvas-Linienstärken
 
@@ -68,7 +69,7 @@ Die Light-Variante wird nur über `[data-theme="light"]` aktiviert. Dark bleibt 
 - Wände und Türen bleiben zoomunabhängig bei 4 px; offene Türen verwenden eine fein gestrichelte Linie.
 - Fog-, Mess- und Struktur-Vorschauen bleiben zoomunabhängig bei 2 px.
 - Grid-Stärke ist ein Screen-Pixel-Wert und darf beim Zoomen nicht sichtbar anwachsen.
-- Freie Zeichnungen, Rechtecke und Kreise behalten die vom Nutzer gewählte Stärke, werden aber visuell auf 1.5 bis 12 Screen-Pixel begrenzt, damit hohe Zoomstufen keine Inhalte verdecken.
+- Freie Zeichnungen, Rechtecke und Kreise behalten die vom Nutzer gewählte Stärke, werden aber visuell auf 1.5 bis 6 Screen-Pixel begrenzt, damit hohe Zoomstufen keine Inhalte verdecken.
 - Host-Canvas und Player-Window müssen dieselben Strichstärkenregeln verwenden.
 - Es darf immer nur eine Canvas-Entität aktiv ausgewählt sein: Raum, Wand oder Zeichnung. Eine neue Auswahl hebt die vorherige Kategorieauswahl auf.
 

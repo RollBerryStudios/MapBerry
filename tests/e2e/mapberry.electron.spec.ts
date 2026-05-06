@@ -92,7 +92,7 @@ test.describe('MapBerry Electron map workflow', () => {
       await page.getByTestId('toolgroup-fog').click()
       await expect(page.getByTestId('tool-fog-rect')).toHaveAttribute('title', 'Rechteck auf')
       await page.getByTestId('toolgroup-draw').click()
-      await expect(page.getByTestId('draw-width-slider')).toHaveValue('4')
+      await expect(page.getByTestId('draw-width-slider')).toHaveValue('3')
       await expect(page.getByTestId('draw-color-black')).toHaveAttribute('aria-pressed', 'true')
       await expect(page.getByTestId('draw-color-red')).toHaveAttribute('title', 'Rot')
 
@@ -168,14 +168,14 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.width ?? 0).toBe(320)
 
       await page.getByTestId('toolgroup-draw').click()
-      await setRange(page.getByTestId('draw-width-slider'), '9')
+      await setRange(page.getByTestId('draw-width-slider'), '3')
       await page.getByTestId('draw-color-red').click()
       await page.getByTestId('tool-draw-rect').click()
       await dragOnCanvas(page, 0.45, 0.40, 0.57, 0.54)
       await expect.poll(async () => {
         const drawing = mapNamed(await readLibrary(userData), 'tool-map')?.drawings[0]
         return drawing && `${drawing.color}:${drawing.width}`
-      }).toBe('#ef4444:9')
+      }).toBe('#ef4444:3')
 
       await page.getByTestId('toolgroup-structure').click()
       await page.getByTestId('tool-wall').click()
@@ -314,6 +314,12 @@ async function assertVisibleLayout(page: import('@playwright/test').Page): Promi
           if (clippedBy) result.push(`${selector} is clipped by ${clippedBy}: ${element.textContent?.trim().slice(0, 40)}`)
         }
       }
+    }
+
+    const appShell = document.querySelector('.app-shell')
+    if (appShell?.getAttribute('data-platform') === 'darwin') {
+      const logo = document.querySelector('.brand img')?.getBoundingClientRect()
+      if (!logo || logo.left < 84) result.push(`brand logo overlaps native window controls: ${logo ? JSON.stringify(logo.toJSON()) : 'missing logo'}`)
     }
 
     function clippedByHiddenAncestor(element: Element, elementRect: DOMRect): string | null {

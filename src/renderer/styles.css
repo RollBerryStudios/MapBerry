@@ -215,6 +215,10 @@ label {
   padding: 8px 14px;
 }
 
+.app-shell[data-platform='darwin'] .titlebar {
+  padding-left: 88px;
+}
+
 .topbar {
   min-height: var(--rb-toolbar-h);
   flex-wrap: wrap;
@@ -272,6 +276,9 @@ label {
   display: flex;
   gap: 8px;
   -webkit-app-region: no-drag;
+}
+
+.app-shell:not([data-platform='darwin']) .window-actions {
   padding-right: var(--titlebar-controls-w, 120px);
 }
 

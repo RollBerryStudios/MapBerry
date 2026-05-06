@@ -445,7 +445,7 @@ function createDMWindow(): void {
     show: false,
     frame: false,
     titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',
-    ...(isDarwin ? {} : { titleBarOverlay: { color: '#08070a', symbolColor: '#f3c46a', height: 36 } }),
+    ...(isDarwin ? { trafficLightPosition: { x: 16, y: 16 } } : { titleBarOverlay: { color: '#08070a', symbolColor: '#f3c46a', height: 36 } }),
     webPreferences: {
       preload,
       contextIsolation: true,
