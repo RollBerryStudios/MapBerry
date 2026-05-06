@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text } from 'react-konva'
 import type Konva from 'konva'
 import {
+  Bell,
   BrickWall,
   CircleDashed,
+  Clock3,
   Contrast,
   Database,
   DoorOpen,
   Eraser,
   Eye,
   EyeOff,
+  FileText,
   Focus,
   Grid3X3,
   Hand,
@@ -21,12 +24,16 @@ import {
   MonitorUp,
   MousePointer2,
   Paintbrush,
+  Pause,
   Pentagon,
+  Play,
   Plus,
   RectangleHorizontal,
+  RefreshCcw,
   RotateCw,
   Ruler,
   ScanLine,
+  Send,
   Square,
   Trash2,
   Type,
@@ -48,7 +55,8 @@ import type {
   ToolId,
   WallRecord
 } from '../shared/mapberry'
-import { gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
+import type { HandoutRecord, PlayerNoticeTone, PlayerOverlayState, PlayerTimerState } from '../shared/mapberry'
+import { EMPTY_PLAYER_OVERLAY, gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
 import { useAssetImage } from './lib/image'
 import { applyFogOp, createFogCanvas, type FogOp } from './lib/fog'
 import { distance, flattened, polygonCenter, rectFromPoints, screenToMap, uid } from './lib/mapMath'
@@ -126,10 +134,19 @@ export function App() {
   const [playerViewport, setPlayerViewport] = useState<PlayerViewport | null>(null)
   const [playerWindowSize, setPlayerWindowSize] = useState({ w: 1280, h: 720 })
   const [openToolGroup, setOpenToolGroup] = useState<string | null>(null)
-  const latestSyncRef = useRef<{ map: MapScene | null; blackout: boolean; viewport: PlayerViewport | null }>({
+  const [playerOverlay, setPlayerOverlay] = useState<PlayerOverlayState>(EMPTY_PLAYER_OVERLAY)
+  const [selectedHandoutId, setSelectedHandoutId] = useState<string | null>(null)
+  const [noticeTitle, setNoticeTitle] = useState('Hinweis')
+  const [noticeBody, setNoticeBody] = useState('')
+  const [noticeTone, setNoticeTone] = useState<PlayerNoticeTone>('message')
+  const [timerLabel, setTimerLabel] = useState('Countdown')
+  const [timerMinutes, setTimerMinutes] = useState(10)
+  const [clockNow, setClockNow] = useState(Date.now())
+  const latestSyncRef = useRef<{ map: MapScene | null; blackout: boolean; viewport: PlayerViewport | null; overlay: PlayerOverlayState }>({
     map: null,
     blackout: false,
-    viewport: null
+    viewport: null,
+    overlay: EMPTY_PLAYER_OVERLAY
   })
 
   const activeMap = useMemo(
@@ -142,9 +159,9 @@ export function App() {
     void window.mapberry.saveLibrary(next)
     if (sync) {
       const nextMap = next.maps.find((map) => map.id === next.activeMapId) ?? null
-      sendFullSync(nextMap, blackout, playerViewport)
+      sendFullSync(nextMap, blackout, playerViewport, playerOverlay)
     }
-  }, [blackout, playerViewport])
+  }, [blackout, playerOverlay, playerViewport])
 
   const updateActiveMap = useCallback((updater: (map: MapScene) => MapScene, sync = true) => {
     setLibrary((prev) => {
@@ -153,15 +170,15 @@ export function App() {
       void window.mapberry.saveLibrary(next)
       if (sync) {
         const nextMap = maps.find((map) => map.id === prev.activeMapId) ?? null
-        sendFullSync(nextMap, blackout, playerViewport)
+        sendFullSync(nextMap, blackout, playerViewport, playerOverlay)
       }
       return next
     })
-  }, [blackout, playerViewport])
+  }, [blackout, playerOverlay, playerViewport])
 
   useEffect(() => {
-    latestSyncRef.current = { map: activeMap, blackout, viewport: playerViewport }
-  }, [activeMap, blackout, playerViewport])
+    latestSyncRef.current = { map: activeMap, blackout, viewport: playerViewport, overlay: playerOverlay }
+  }, [activeMap, blackout, playerOverlay, playerViewport])
 
   useEffect(() => {
     let cancelled = false
@@ -175,7 +192,7 @@ export function App() {
     const offClosed = window.mapberry.onPlayerWindowClosed(() => setPlayerOpen(false))
     const offSync = window.mapberry.onPlayerSyncRequest(() => {
       const latest = latestSyncRef.current
-      sendFullSync(latest.map, latest.blackout, latest.viewport)
+      sendFullSync(latest.map, latest.blackout, latest.viewport, latest.overlay)
     })
     const offSize = window.mapberry.onPlayerWindowSize((size) => setPlayerWindowSize(size))
     return () => {
@@ -193,12 +210,33 @@ export function App() {
   }, [library])
 
   useEffect(() => {
-    sendFullSync(activeMap, blackout, playerViewport)
-  }, [activeMap?.id, blackout, playerViewport])
+    sendFullSync(activeMap, blackout, playerViewport, playerOverlay)
+  }, [activeMap?.id, blackout, playerOverlay, playerViewport])
 
   useEffect(() => {
     window.mapberry.sendPlayerViewport(playerViewport)
   }, [playerViewport])
+
+  useEffect(() => {
+    if (!playerOverlay.timer?.running) return
+    const id = window.setInterval(() => setClockNow(Date.now()), 500)
+    return () => window.clearInterval(id)
+  }, [playerOverlay.timer?.id, playerOverlay.timer?.running])
+
+  useEffect(() => {
+    if (!activeMap) {
+      setSelectedHandoutId(null)
+      setPlayerOverlay((overlay) => overlay.activeHandoutId ? { ...overlay, activeHandoutId: null } : overlay)
+      return
+    }
+    const handoutStillExists = selectedHandoutId && activeMap.handouts.some((handout) => handout.id === selectedHandoutId)
+    if (!handoutStillExists) setSelectedHandoutId(activeMap.handouts[0]?.id ?? null)
+    setPlayerOverlay((overlay) => (
+      overlay.activeHandoutId && !activeMap.handouts.some((handout) => handout.id === overlay.activeHandoutId)
+        ? { ...overlay, activeHandoutId: null }
+        : overlay
+    ))
+  }, [activeMap?.id, activeMap?.handouts.length, selectedHandoutId])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -231,7 +269,7 @@ export function App() {
     }
     await window.mapberry.openPlayerWindow()
     setPlayerOpen(true)
-    setTimeout(() => sendFullSync(activeMap, blackout, playerViewport), 400)
+    setTimeout(() => sendFullSync(activeMap, blackout, playerViewport, playerOverlay), 400)
   }
 
   function patchActiveMap(patch: Partial<MapScene>, sync = true) {
@@ -257,6 +295,109 @@ export function App() {
     }
     setPlayerViewport(viewport)
     window.mapberry.sendPlayerViewport(viewport)
+  }
+
+  function addHandout() {
+    if (!activeMap) return
+    const now = new Date().toISOString()
+    const handout: HandoutRecord = {
+      id: uid(),
+      title: `Handout ${activeMap.handouts.length + 1}`,
+      body: '',
+      imagePath: null,
+      createdAt: now,
+      updatedAt: now
+    }
+    updateActiveMap((map) => ({ ...map, handouts: [...map.handouts, handout], updatedAt: now }))
+    setSelectedHandoutId(handout.id)
+  }
+
+  function patchHandout(id: string, patch: Partial<HandoutRecord>) {
+    const now = new Date().toISOString()
+    updateActiveMap((map) => ({
+      ...map,
+      handouts: map.handouts.map((handout) => handout.id === id ? { ...handout, ...patch, updatedAt: now } : handout),
+      updatedAt: now
+    }))
+  }
+
+  function deleteHandout(id: string) {
+    updateActiveMap((map) => ({ ...map, handouts: map.handouts.filter((handout) => handout.id !== id), updatedAt: new Date().toISOString() }))
+    setSelectedHandoutId((current) => current === id ? null : current)
+    setPlayerOverlay((overlay) => overlay.activeHandoutId === id ? { ...overlay, activeHandoutId: null } : overlay)
+  }
+
+  async function importHandoutImage(id: string) {
+    const imagePath = await window.mapberry.importHandoutImage()
+    if (imagePath) patchHandout(id, { imagePath })
+  }
+
+  function removeHandoutImage(id: string) {
+    patchHandout(id, { imagePath: null })
+  }
+
+  function showHandout(id: string | null) {
+    setPlayerOverlay((overlay) => ({ ...overlay, activeHandoutId: id }))
+  }
+
+  function sendNotice() {
+    const body = noticeBody.trim()
+    if (!body) return
+    setPlayerOverlay((overlay) => ({
+      ...overlay,
+      notice: {
+        id: uid(),
+        title: noticeTitle.trim() || (noticeTone === 'alert' ? 'Alarm' : 'Hinweis'),
+        body,
+        tone: noticeTone,
+        createdAt: Date.now()
+      }
+    }))
+  }
+
+  function clearNotice() {
+    setPlayerOverlay((overlay) => ({ ...overlay, notice: null }))
+  }
+
+  function startTimer() {
+    const durationSeconds = Math.max(5, Math.round(timerMinutes * 60) || 60)
+    const timer: PlayerTimerState = {
+      id: uid(),
+      label: timerLabel.trim() || 'Countdown',
+      durationSeconds,
+      remainingSeconds: durationSeconds,
+      running: true,
+      startedAt: Date.now()
+    }
+    setClockNow(Date.now())
+    setPlayerOverlay((overlay) => ({ ...overlay, timer }))
+  }
+
+  function pauseOrResumeTimer() {
+    setClockNow(Date.now())
+    setPlayerOverlay((overlay) => {
+      const timer = overlay.timer
+      if (!timer) return overlay
+      const remainingSeconds = timerRemainingSeconds(timer, Date.now())
+      return {
+        ...overlay,
+        timer: timer.running
+          ? { ...timer, remainingSeconds, running: false, startedAt: null }
+          : { ...timer, remainingSeconds, running: true, startedAt: Date.now() }
+      }
+    })
+  }
+
+  function resetTimer() {
+    setClockNow(Date.now())
+    setPlayerOverlay((overlay) => {
+      const timer = overlay.timer
+      return timer ? { ...overlay, timer: { ...timer, remainingSeconds: timer.durationSeconds, running: false, startedAt: null } } : overlay
+    })
+  }
+
+  function clearTimer() {
+    setPlayerOverlay((overlay) => ({ ...overlay, timer: null }))
   }
 
   if (!ready) {
@@ -413,6 +554,32 @@ export function App() {
                 drawWidth={drawWidth}
                 onDrawColor={setDrawColor}
                 onDrawWidth={setDrawWidth}
+                playerOverlay={playerOverlay}
+                selectedHandoutId={selectedHandoutId}
+                noticeTitle={noticeTitle}
+                noticeBody={noticeBody}
+                noticeTone={noticeTone}
+                timerLabel={timerLabel}
+                timerMinutes={timerMinutes}
+                clockNow={clockNow}
+                onSelectedHandout={setSelectedHandoutId}
+                onAddHandout={addHandout}
+                onPatchHandout={patchHandout}
+                onDeleteHandout={deleteHandout}
+                onImportHandoutImage={importHandoutImage}
+                onRemoveHandoutImage={removeHandoutImage}
+                onShowHandout={showHandout}
+                onNoticeTitle={setNoticeTitle}
+                onNoticeBody={setNoticeBody}
+                onNoticeTone={setNoticeTone}
+                onSendNotice={sendNotice}
+                onClearNotice={clearNotice}
+                onTimerLabel={setTimerLabel}
+                onTimerMinutes={setTimerMinutes}
+                onStartTimer={startTimer}
+                onPauseOrResumeTimer={pauseOrResumeTimer}
+                onResetTimer={resetTimer}
+                onClearTimer={clearTimer}
                 onTool={(nextTool) => {
                   setTool(nextTool)
                   setOpenToolGroup(null)
@@ -467,6 +634,32 @@ function ToolDock({
   drawWidth,
   onDrawColor,
   onDrawWidth,
+  playerOverlay,
+  selectedHandoutId,
+  noticeTitle,
+  noticeBody,
+  noticeTone,
+  timerLabel,
+  timerMinutes,
+  clockNow,
+  onSelectedHandout,
+  onAddHandout,
+  onPatchHandout,
+  onDeleteHandout,
+  onImportHandoutImage,
+  onRemoveHandoutImage,
+  onShowHandout,
+  onNoticeTitle,
+  onNoticeBody,
+  onNoticeTone,
+  onSendNotice,
+  onClearNotice,
+  onTimerLabel,
+  onTimerMinutes,
+  onStartTimer,
+  onPauseOrResumeTimer,
+  onResetTimer,
+  onClearTimer,
   onTool
 }: {
   tool: ToolId
@@ -478,9 +671,36 @@ function ToolDock({
   drawWidth: number
   onDrawColor: (color: string) => void
   onDrawWidth: (width: number) => void
+  playerOverlay: PlayerOverlayState
+  selectedHandoutId: string | null
+  noticeTitle: string
+  noticeBody: string
+  noticeTone: PlayerNoticeTone
+  timerLabel: string
+  timerMinutes: number
+  clockNow: number
+  onSelectedHandout: (id: string | null) => void
+  onAddHandout: () => void
+  onPatchHandout: (id: string, patch: Partial<HandoutRecord>) => void
+  onDeleteHandout: (id: string) => void
+  onImportHandoutImage: (id: string) => void
+  onRemoveHandoutImage: (id: string) => void
+  onShowHandout: (id: string | null) => void
+  onNoticeTitle: (title: string) => void
+  onNoticeBody: (body: string) => void
+  onNoticeTone: (tone: PlayerNoticeTone) => void
+  onSendNotice: () => void
+  onClearNotice: () => void
+  onTimerLabel: (label: string) => void
+  onTimerMinutes: (minutes: number) => void
+  onStartTimer: () => void
+  onPauseOrResumeTimer: () => void
+  onResetTimer: () => void
+  onClearTimer: () => void
   onTool: (tool: ToolId) => void
 }) {
   const gridOpen = openGroup === 'grid'
+  const liveOpen = openGroup === 'live'
   return (
     <nav className="tool-dock" aria-label="Kartenwerkzeuge">
       {TOOL_DOCK_GROUPS.map((group) => {
@@ -538,6 +758,51 @@ function ToolDock({
           onClick={() => onOpenGroup(gridOpen ? null : 'grid')}
         >
           <Grid3X3 size={20} />
+        </button>
+      </div>
+      <span className="dock-divider" aria-hidden="true" />
+      <div className="dock-group">
+        {liveOpen && (
+          <LiveSessionPopover
+            map={map}
+            overlay={playerOverlay}
+            selectedHandoutId={selectedHandoutId}
+            noticeTitle={noticeTitle}
+            noticeBody={noticeBody}
+            noticeTone={noticeTone}
+            timerLabel={timerLabel}
+            timerMinutes={timerMinutes}
+            clockNow={clockNow}
+            onSelectedHandout={onSelectedHandout}
+            onAddHandout={onAddHandout}
+            onPatchHandout={onPatchHandout}
+            onDeleteHandout={onDeleteHandout}
+            onImportHandoutImage={onImportHandoutImage}
+            onRemoveHandoutImage={onRemoveHandoutImage}
+            onShowHandout={onShowHandout}
+            onNoticeTitle={onNoticeTitle}
+            onNoticeBody={onNoticeBody}
+            onNoticeTone={onNoticeTone}
+            onSendNotice={onSendNotice}
+            onClearNotice={onClearNotice}
+            onTimerLabel={onTimerLabel}
+            onTimerMinutes={onTimerMinutes}
+            onStartTimer={onStartTimer}
+            onPauseOrResumeTimer={onPauseOrResumeTimer}
+            onResetTimer={onResetTimer}
+            onClearTimer={onClearTimer}
+          />
+        )}
+        <button
+          className={`dock-button live-button ${liveOpen ? 'open' : ''} ${playerOverlay.notice || playerOverlay.timer || playerOverlay.activeHandoutId ? 'active' : ''}`}
+          data-testid="toolgroup-live"
+          title="Live: Handouts, Nachrichten und Timer"
+          aria-label="Live: Handouts, Nachrichten und Timer"
+          aria-expanded={liveOpen}
+          aria-haspopup="dialog"
+          onClick={() => onOpenGroup(liveOpen ? null : 'live')}
+        >
+          <Bell size={20} />
         </button>
       </div>
     </nav>
@@ -666,6 +931,170 @@ function DrawSettingsPopover({
       </div>
     </div>
   )
+}
+
+function LiveSessionPopover({
+  map,
+  overlay,
+  selectedHandoutId,
+  noticeTitle,
+  noticeBody,
+  noticeTone,
+  timerLabel,
+  timerMinutes,
+  clockNow,
+  onSelectedHandout,
+  onAddHandout,
+  onPatchHandout,
+  onDeleteHandout,
+  onImportHandoutImage,
+  onRemoveHandoutImage,
+  onShowHandout,
+  onNoticeTitle,
+  onNoticeBody,
+  onNoticeTone,
+  onSendNotice,
+  onClearNotice,
+  onTimerLabel,
+  onTimerMinutes,
+  onStartTimer,
+  onPauseOrResumeTimer,
+  onResetTimer,
+  onClearTimer
+}: {
+  map: MapScene
+  overlay: PlayerOverlayState
+  selectedHandoutId: string | null
+  noticeTitle: string
+  noticeBody: string
+  noticeTone: PlayerNoticeTone
+  timerLabel: string
+  timerMinutes: number
+  clockNow: number
+  onSelectedHandout: (id: string | null) => void
+  onAddHandout: () => void
+  onPatchHandout: (id: string, patch: Partial<HandoutRecord>) => void
+  onDeleteHandout: (id: string) => void
+  onImportHandoutImage: (id: string) => void
+  onRemoveHandoutImage: (id: string) => void
+  onShowHandout: (id: string | null) => void
+  onNoticeTitle: (title: string) => void
+  onNoticeBody: (body: string) => void
+  onNoticeTone: (tone: PlayerNoticeTone) => void
+  onSendNotice: () => void
+  onClearNotice: () => void
+  onTimerLabel: (label: string) => void
+  onTimerMinutes: (minutes: number) => void
+  onStartTimer: () => void
+  onPauseOrResumeTimer: () => void
+  onResetTimer: () => void
+  onClearTimer: () => void
+}) {
+  const selectedHandout = map.handouts.find((handout) => handout.id === selectedHandoutId) ?? null
+  const timer = overlay.timer
+  const remaining = timer ? timerRemainingSeconds(timer, clockNow) : null
+  const canSendNotice = noticeBody.trim().length > 0
+
+  return (
+    <div className="tool-popover live-popover" role="dialog" aria-label="Live-Spielerfunktionen">
+      <div className="tool-popover-title">Live</div>
+      <section className="live-section">
+        <div className="live-section-head">
+          <span><MessageIcon /> Nachricht</span>
+          <div className="segmented small">
+            <button className={noticeTone === 'message' ? 'active' : ''} onClick={() => onNoticeTone('message')}>Info</button>
+            <button className={noticeTone === 'alert' ? 'active' : ''} onClick={() => onNoticeTone('alert')}>Alarm</button>
+          </div>
+        </div>
+        <input value={noticeTitle} aria-label="Nachrichtentitel" data-testid="live-message-title" onChange={(event) => onNoticeTitle(event.target.value)} />
+        <textarea value={noticeBody} aria-label="Nachrichtentext" data-testid="live-message-body" placeholder="Kurze Nachricht an das Spielerfenster" onChange={(event) => onNoticeBody(event.target.value)} />
+        <div className="live-actions">
+          <button className="primary icon-text" data-testid="live-message-send" disabled={!canSendNotice} onClick={onSendNotice}>
+            <Send size={16} />
+            <span>Senden</span>
+          </button>
+          <button className="ghost icon-text" data-testid="live-message-clear" onClick={onClearNotice}>
+            <EyeOff size={16} />
+            <span>Ausblenden</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="live-section">
+        <div className="live-section-head">
+          <span><Clock3 size={16} /> Timer</span>
+          <strong>{remaining === null ? '--:--' : formatTimer(remaining)}</strong>
+        </div>
+        <div className="live-inline">
+          <input value={timerLabel} aria-label="Timer-Beschriftung" data-testid="live-timer-label" onChange={(event) => onTimerLabel(event.target.value)} />
+          <input type="number" min="0.1" max="240" step="0.5" value={timerMinutes} aria-label="Timer-Minuten" data-testid="live-timer-minutes" onChange={(event) => onTimerMinutes(Number(event.target.value) || 1)} />
+        </div>
+        <div className="live-actions">
+          <button className="primary icon-text" data-testid="live-timer-start" onClick={onStartTimer}>
+            <Play size={16} />
+            <span>Start</span>
+          </button>
+          <button className="ghost icon-text" data-testid="live-timer-toggle" disabled={!timer} onClick={onPauseOrResumeTimer}>
+            {timer?.running ? <Pause size={16} /> : <Play size={16} />}
+            <span>{timer?.running ? 'Pause' : 'Weiter'}</span>
+          </button>
+          <button className="icon-only" title="Timer zurücksetzen" aria-label="Timer zurücksetzen" data-testid="live-timer-reset" disabled={!timer} onClick={onResetTimer}>
+            <RefreshCcw size={16} />
+          </button>
+          <button className="icon-only" title="Timer ausblenden" aria-label="Timer ausblenden" data-testid="live-timer-clear" disabled={!timer} onClick={onClearTimer}>
+            <EyeOff size={16} />
+          </button>
+        </div>
+      </section>
+
+      <section className="live-section">
+        <div className="live-section-head">
+          <span><FileText size={16} /> Handouts</span>
+          <button className="icon-only" title="Handout hinzufügen" aria-label="Handout hinzufügen" data-testid="live-handout-add" onClick={onAddHandout}>
+            <Plus size={16} />
+          </button>
+        </div>
+        <select value={selectedHandoutId ?? ''} aria-label="Handout auswählen" data-testid="live-handout-select" onChange={(event) => onSelectedHandout(event.target.value || null)}>
+          <option value="">Kein Handout</option>
+          {map.handouts.map((handout) => <option key={handout.id} value={handout.id}>{handout.title}</option>)}
+        </select>
+        {selectedHandout && (
+          <>
+            <input value={selectedHandout.title} aria-label="Handout-Titel" data-testid="live-handout-title" onChange={(event) => onPatchHandout(selectedHandout.id, { title: event.target.value })} />
+            <textarea value={selectedHandout.body} aria-label="Handout-Text" data-testid="live-handout-body" placeholder="Text, Hinweise oder Vorlesetext" onChange={(event) => onPatchHandout(selectedHandout.id, { body: event.target.value })} />
+            <div className="handout-image-row">
+              <span>{selectedHandout.imagePath ? 'Bild verknüpft' : 'Kein Bild'}</span>
+              <button className="ghost icon-text" data-testid="live-handout-image" onClick={() => onImportHandoutImage(selectedHandout.id)}>
+                <Upload size={16} />
+                <span>Bild</span>
+              </button>
+              <button className="icon-only" title="Handout-Bild entfernen" aria-label="Handout-Bild entfernen" data-testid="live-handout-image-remove" disabled={!selectedHandout.imagePath} onClick={() => onRemoveHandoutImage(selectedHandout.id)}>
+                <EyeOff size={16} />
+              </button>
+            </div>
+            <div className="live-actions">
+              <button className="primary icon-text" data-testid="live-handout-show" onClick={() => onShowHandout(selectedHandout.id)}>
+                <Eye size={16} />
+                <span>Anzeigen</span>
+              </button>
+              <button className="ghost icon-text" data-testid="live-handout-hide" disabled={overlay.activeHandoutId !== selectedHandout.id} onClick={() => onShowHandout(null)}>
+                <EyeOff size={16} />
+                <span>Ausblenden</span>
+              </button>
+              <button className="danger ghost icon-text" data-testid="live-handout-delete" onClick={() => onDeleteHandout(selectedHandout.id)}>
+                <Trash2 size={16} />
+                <span>Löschen</span>
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function MessageIcon() {
+  return <Type size={16} />
 }
 
 function ToolMenuButton({
@@ -1290,11 +1719,24 @@ function buildMeasure(tool: ToolId, start: { x: number; y: number }, end: { x: n
   }
 }
 
-function sendFullSync(map: MapScene | null, blackout: boolean, viewport: PlayerViewport | null) {
+function timerRemainingSeconds(timer: PlayerTimerState, now: number) {
+  if (!timer.running || !timer.startedAt) return Math.max(0, Math.round(timer.remainingSeconds))
+  return Math.max(0, Math.round(timer.remainingSeconds - (now - timer.startedAt) / 1000))
+}
+
+function formatTimer(seconds: number) {
+  const safe = Math.max(0, Math.round(seconds))
+  const minutes = Math.floor(safe / 60).toString().padStart(2, '0')
+  const rest = (safe % 60).toString().padStart(2, '0')
+  return `${minutes}:${rest}`
+}
+
+function sendFullSync(map: MapScene | null, blackout: boolean, viewport: PlayerViewport | null, overlay: PlayerOverlayState) {
   window.mapberry?.sendPlayerSync({
     map,
     blackout,
     viewport,
+    overlay,
     mode: blackout ? 'blackout' : map ? 'map' : 'idle'
   })
 }

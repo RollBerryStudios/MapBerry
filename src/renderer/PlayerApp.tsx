@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text } from 'react-konva'
 import logoUrl from './assets/MapBerry.png'
-import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerPointer, PlayerViewport, RoomRecord, WallRecord } from '../shared/mapberry'
-import { normalizeGridColor } from '../shared/mapberry'
+import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerOverlayState, PlayerPointer, PlayerTimerState, PlayerViewport, RoomRecord, WallRecord } from '../shared/mapberry'
+import { EMPTY_PLAYER_OVERLAY, normalizeGridColor } from '../shared/mapberry'
+import { localAssetUrl } from './lib/asset'
 import { useAssetImage } from './lib/image'
 import { distance, flattened, polygonCenter, rectFromPoints } from './lib/mapMath'
 import './styles.css'
@@ -15,7 +16,8 @@ const IDLE_STATE: PlayerMapState = {
   map: null,
   mode: 'idle',
   blackout: false,
-  viewport: null
+  viewport: null,
+  overlay: EMPTY_PLAYER_OVERLAY
 }
 
 export function PlayerApp() {
@@ -53,14 +55,21 @@ export function PlayerApp() {
     }
   }, [])
 
+  const overlay = state.overlay ?? EMPTY_PLAYER_OVERLAY
+
   if (state.blackout || state.mode === 'blackout') {
-    return <div className="player-blackout" data-testid="player-blackout" />
+    return (
+      <div className="player-blackout" data-testid="player-blackout">
+        <PlayerOverlay map={state.map} overlay={overlay} />
+      </div>
+    )
   }
 
   if (!state.map) {
     return (
       <div className="player-idle" data-testid="player-idle">
         <img src={logoUrl} alt="" />
+        <PlayerOverlay map={null} overlay={overlay} />
       </div>
     )
   }
@@ -71,6 +80,7 @@ export function PlayerApp() {
       viewport={viewport ?? state.viewport}
       pointer={pointer}
       measure={measure}
+      overlay={overlay}
       stageWidth={size.width}
       stageHeight={size.height}
     />
@@ -82,6 +92,7 @@ function PlayerMap({
   viewport,
   pointer,
   measure,
+  overlay,
   stageWidth,
   stageHeight
 }: {
@@ -89,6 +100,7 @@ function PlayerMap({
   viewport: PlayerViewport | null
   pointer: PlayerPointer | null
   measure: PlayerMeasure | null
+  overlay: PlayerOverlayState
   stageWidth: number
   stageHeight: number
 }) {
@@ -123,6 +135,47 @@ function PlayerMap({
           </Group>
         </Layer>
       </Stage>
+      <PlayerOverlay map={map} overlay={overlay} />
+    </div>
+  )
+}
+
+function PlayerOverlay({ map, overlay }: { map: MapScene | null; overlay: PlayerOverlayState }) {
+  const [now, setNow] = useState(Date.now())
+  const handout = map?.handouts.find((entry) => entry.id === overlay.activeHandoutId) ?? null
+  const timer = overlay.timer
+  const remaining = timer ? timerRemainingSeconds(timer, now) : null
+
+  useEffect(() => {
+    if (!timer?.running) return
+    const id = window.setInterval(() => setNow(Date.now()), 500)
+    return () => window.clearInterval(id)
+  }, [timer?.id, timer?.running])
+
+  if (!overlay.notice && !timer && !handout) return null
+
+  return (
+    <div className="player-overlay" data-testid="player-overlay">
+      {timer && (
+        <div className={`player-timer ${remaining === 0 ? 'expired' : ''}`} data-testid="player-timer">
+          <span>{timer.label}</span>
+          <strong>{formatTimer(remaining ?? 0)}</strong>
+        </div>
+      )}
+      {overlay.notice && (
+        <div className={`player-notice ${overlay.notice.tone}`} data-testid="player-notice">
+          <span>{overlay.notice.title}</span>
+          <strong>{overlay.notice.body}</strong>
+        </div>
+      )}
+      {handout && (
+        <article className="player-handout" data-testid="player-handout">
+          <span>Handout</span>
+          <h1>{handout.title}</h1>
+          {handout.imagePath && <img src={localAssetUrl(handout.imagePath)} alt="" data-testid="player-handout-image" />}
+          <p>{handout.body}</p>
+        </article>
+      )}
     </div>
   )
 }
@@ -260,4 +313,16 @@ function MeasureShape({ measure, gridSize }: { measure: PlayerMeasure; gridSize:
       <Text x={(measure.startX + measure.endX) / 2 + 12} y={(measure.startY + measure.endY) / 2 + 12} text={label} fill={GOLD} fontSize={20} />
     </Group>
   )
+}
+
+function timerRemainingSeconds(timer: PlayerTimerState, now: number) {
+  if (!timer.running || !timer.startedAt) return Math.max(0, Math.round(timer.remainingSeconds))
+  return Math.max(0, Math.round(timer.remainingSeconds - (now - timer.startedAt) / 1000))
+}
+
+function formatTimer(seconds: number) {
+  const safe = Math.max(0, Math.round(seconds))
+  const minutes = Math.floor(safe / 60).toString().padStart(2, '0')
+  const rest = (safe % 60).toString().padStart(2, '0')
+  return `${minutes}:${rest}`
 }

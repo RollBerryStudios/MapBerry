@@ -82,6 +82,15 @@ export interface PinRecord {
   color: string
 }
 
+export interface HandoutRecord {
+  id: string
+  title: string
+  body: string
+  imagePath: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface MapScene {
   id: string
   name: string
@@ -106,6 +115,7 @@ export interface MapScene {
   rooms: RoomRecord[]
   walls: WallRecord[]
   pins: PinRecord[]
+  handouts: HandoutRecord[]
   createdAt: string
   updatedAt: string
 }
@@ -121,6 +131,7 @@ export interface PlayerMapState {
   mode: 'idle' | 'map' | 'blackout'
   blackout: boolean
   viewport: PlayerViewport | null
+  overlay: PlayerOverlayState
 }
 
 export interface PlayerPointer {
@@ -143,6 +154,37 @@ export interface PlayerViewport {
   w: number
   h: number
   rotation: number
+}
+
+export type PlayerNoticeTone = 'message' | 'alert'
+
+export interface PlayerNotice {
+  id: string
+  title: string
+  body: string
+  tone: PlayerNoticeTone
+  createdAt: number
+}
+
+export interface PlayerTimerState {
+  id: string
+  label: string
+  durationSeconds: number
+  remainingSeconds: number
+  running: boolean
+  startedAt: number | null
+}
+
+export interface PlayerOverlayState {
+  notice: PlayerNotice | null
+  timer: PlayerTimerState | null
+  activeHandoutId: string | null
+}
+
+export const EMPTY_PLAYER_OVERLAY: PlayerOverlayState = {
+  notice: null,
+  timer: null,
+  activeHandoutId: null
 }
 
 export interface DisplayInfo {

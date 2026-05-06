@@ -6,6 +6,7 @@ export interface MapBerryAPI {
   saveLibrary: (library: MapBerryLibrary) => Promise<boolean>
   saveLibrarySync: (library: MapBerryLibrary) => boolean
   importMap: () => Promise<MapScene | null>
+  importHandoutImage: () => Promise<string | null>
   confirm: (message: string, detail?: string) => Promise<boolean>
   getAssetDataUrl: (assetPath: string) => Promise<string | null>
   revealData: () => Promise<string>
@@ -38,6 +39,7 @@ const dmApi: MapBerryAPI = {
   saveLibrary: (library) => ipcRenderer.invoke('mapberry:library-save', library),
   saveLibrarySync: (library) => Boolean(ipcRenderer.sendSync('mapberry:library-save-sync', library)),
   importMap: () => ipcRenderer.invoke('mapberry:import-map'),
+  importHandoutImage: () => ipcRenderer.invoke('mapberry:import-handout-image'),
   confirm: (message, detail) => ipcRenderer.invoke('mapberry:confirm', message, detail),
   getAssetDataUrl: (assetPath) => ipcRenderer.invoke('mapberry:get-asset-data-url', assetPath),
   revealData: () => ipcRenderer.invoke('mapberry:reveal-data'),

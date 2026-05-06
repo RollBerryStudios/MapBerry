@@ -10,6 +10,7 @@ const isDev = process.env.NODE_ENV === 'development'
 const RENDERER_URL = 'http://localhost:5176'
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const MAX_IMAGE_SIZE = 100 * 1024 * 1024
+const MAX_HANDOUT_IMAGE_SIZE = 10 * 1024 * 1024
 const DEMO_MAP_ID = 'mapberry-demo-map'
 const DEMO_MAP_FILE = 'demo-map.png'
 
@@ -44,6 +45,12 @@ function dataDir(): string {
 
 function assetsDir(): string {
   const dir = join(userDataPath(), 'assets', 'maps')
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function handoutAssetsDir(): string {
+  const dir = join(userDataPath(), 'assets', 'handouts')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
 }
@@ -105,6 +112,7 @@ function createDemoMap(): MapScene | null {
     rooms: [],
     walls: [],
     pins: [],
+    handouts: [],
     createdAt: now,
     updatedAt: now
   }
@@ -143,6 +151,19 @@ function normalizeScene(input: Partial<MapScene>): MapScene | null {
     rooms: Array.isArray(input.rooms) ? input.rooms.filter((r) => r && typeof r.id === 'string') as MapScene['rooms'] : [],
     walls: Array.isArray(input.walls) ? input.walls.filter((w) => w && typeof w.id === 'string') as MapScene['walls'] : [],
     pins: Array.isArray(input.pins) ? input.pins.filter((p) => p && typeof p.id === 'string') as MapScene['pins'] : [],
+    handouts: Array.isArray(input.handouts) ? input.handouts
+      .filter((h) => h && typeof h.id === 'string')
+      .map((h) => {
+        const handout = h as Partial<MapScene['handouts'][number]>
+        return {
+          id: String(handout.id),
+          title: typeof handout.title === 'string' && handout.title.trim() ? handout.title.trim().slice(0, 160) : 'Handout',
+          body: typeof handout.body === 'string' ? handout.body.slice(0, 12000) : '',
+          imagePath: typeof handout.imagePath === 'string' && handout.imagePath ? handout.imagePath : null,
+          createdAt: typeof handout.createdAt === 'string' ? handout.createdAt : now,
+          updatedAt: typeof handout.updatedAt === 'string' ? handout.updatedAt : now
+        }
+      }) : [],
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : now,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : now
   }
@@ -211,9 +232,9 @@ function hasValidImageMagic(buf: Buffer, ext: string): boolean {
   }
 }
 
-async function isValidImageImportSource(srcPath: string, ext: string): Promise<boolean> {
+async function isValidImageImportSource(srcPath: string, ext: string, maxSize = MAX_IMAGE_SIZE): Promise<boolean> {
   const stat = await fsPromises.stat(srcPath)
-  if (!stat.isFile() || stat.size > MAX_IMAGE_SIZE) return false
+  if (!stat.isFile() || stat.size > maxSize) return false
   const handle = await fsPromises.open(srcPath, 'r')
   try {
     const buf = Buffer.alloc(16)
@@ -224,39 +245,49 @@ async function isValidImageImportSource(srcPath: string, ext: string): Promise<b
   }
 }
 
-async function importMapFile(event: Electron.IpcMainInvokeEvent): Promise<MapScene | null> {
+async function importImageAsset(event: Electron.IpcMainInvokeEvent, options: {
+  title: string
+  destDir: string
+  maxSize: number
+}): Promise<{ assetPath: string; sourcePath: string } | null> {
   const win = BrowserWindow.fromWebContents(event.sender)
   const result = win
     ? await dialog.showOpenDialog(win, {
-      title: 'Karte importieren',
+      title: options.title,
       properties: ['openFile'],
-      filters: [{ name: 'Kartenbilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+      filters: [{ name: 'Bilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
     })
     : await dialog.showOpenDialog({
-      title: 'Karte importieren',
+      title: options.title,
       properties: ['openFile'],
-      filters: [{ name: 'Kartenbilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+      filters: [{ name: 'Bilder', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
     })
   if (result.canceled || !result.filePaths[0]) return null
 
   const srcPath = result.filePaths[0]
   const ext = extname(srcPath).toLowerCase()
-  if (!IMAGE_EXT.has(ext) || !await isValidImageImportSource(srcPath, ext)) return null
+  if (!IMAGE_EXT.has(ext) || !await isValidImageImportSource(srcPath, ext, options.maxSize)) return null
 
   const destName = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`
-  const destPath = join(assetsDir(), destName)
+  const destPath = join(options.destDir, destName)
   try {
     await fsPromises.copyFile(srcPath, destPath)
+    return { assetPath: relative(userDataPath(), destPath).replace(/\\/g, '/'), sourcePath: srcPath }
   } catch {
     try { if (existsSync(destPath)) unlinkSync(destPath) } catch { /* best effort */ }
     return null
   }
+}
+
+async function importMapFile(event: Electron.IpcMainInvokeEvent): Promise<MapScene | null> {
+  const imported = await importImageAsset(event, { title: 'Karte importieren', destDir: assetsDir(), maxSize: MAX_IMAGE_SIZE })
+  if (!imported) return null
 
   const now = new Date().toISOString()
   return {
     id: makeId(),
-    name: basename(srcPath, ext),
-    imagePath: relative(userDataPath(), destPath).replace(/\\/g, '/'),
+    name: basename(imported.sourcePath, extname(imported.sourcePath)),
+    imagePath: imported.assetPath,
     width: 0,
     height: 0,
     gridType: 'square',
@@ -277,6 +308,7 @@ async function importMapFile(event: Electron.IpcMainInvokeEvent): Promise<MapSce
     rooms: [],
     walls: [],
     pins: [],
+    handouts: [],
     createdAt: now,
     updatedAt: now
   }
@@ -355,6 +387,10 @@ function registerIpc(): void {
     }
   })
   ipcMain.handle('mapberry:import-map', importMapFile)
+  ipcMain.handle('mapberry:import-handout-image', async (event) => {
+    const imported = await importImageAsset(event, { title: 'Handout-Bild importieren', destDir: handoutAssetsDir(), maxSize: MAX_HANDOUT_IMAGE_SIZE })
+    return imported?.assetPath ?? null
+  })
   ipcMain.handle('mapberry:confirm', async (event, message: string, detail?: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const opts: Electron.MessageBoxOptions = {

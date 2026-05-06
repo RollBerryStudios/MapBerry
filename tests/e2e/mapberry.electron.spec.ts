@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   clickCanvas,
   closeMapBerry,
+  createPngFixture,
   dragOnCanvas,
   freshUserData,
   importFixtureMap,
@@ -175,6 +176,59 @@ test.describe('MapBerry Electron map workflow', () => {
       const closed = player.waitForEvent('close')
       await page.getByRole('button', { name: 'Spielerfenster an' }).click()
       await closed
+    } finally {
+      await closeMapBerry(app)
+    }
+  })
+
+  test('sends player messages, alerts, timer, and handouts from the live toolbar', async ({}, testInfo) => {
+    const userData = await freshUserData(testInfo)
+    const { app, page } = await launchMapBerry(userData)
+    try {
+      const playerPromise = app.waitForEvent('window')
+      await page.getByRole('button', { name: 'Spielerfenster' }).click()
+      const player = await playerPromise
+      await player.waitForLoadState('domcontentloaded')
+      await expect(player.getByTestId('player-stage')).toBeVisible()
+
+      await page.getByTestId('toolgroup-live').click()
+      await page.getByTestId('live-message-title').fill('Hinweis')
+      await page.getByTestId('live-message-body').fill('Die schwere Tür öffnet sich.')
+      await page.getByTestId('live-message-send').click()
+      await expect(player.getByTestId('player-notice')).toContainText('Die schwere Tür öffnet sich.')
+
+      await page.getByRole('button', { name: 'Alarm' }).click()
+      await page.getByTestId('live-message-title').fill('Alarm')
+      await page.getByTestId('live-message-body').fill('Zeitdruck!')
+      await page.getByTestId('live-message-send').click()
+      await expect(player.getByTestId('player-notice')).toHaveClass(/alert/)
+
+      await page.getByTestId('live-timer-label').fill('Rundenzeit')
+      await page.getByTestId('live-timer-minutes').fill('1')
+      await page.getByTestId('live-timer-start').click()
+      await expect(player.getByTestId('player-timer')).toContainText('Rundenzeit')
+      await expect.poll(async () => player.getByTestId('player-timer').innerText()).toMatch(/0[01]:[0-5][0-9]/)
+
+      await page.getByTestId('live-handout-add').click()
+      await page.getByTestId('live-handout-title').fill('Geheime Notiz')
+      await page.getByTestId('live-handout-body').fill('Der Hebel zeigt nach Norden.')
+      const handoutImage = testInfo.outputPath('handout-image.png')
+      await createPngFixture(handoutImage, 120, 80)
+      await setImportDialogFile(app, handoutImage)
+      await page.getByTestId('live-handout-image').click()
+      await page.getByTestId('live-handout-show').click()
+      await expect(player.getByTestId('player-handout')).toContainText('Geheime Notiz')
+      await expect(player.getByTestId('player-handout')).toContainText('Der Hebel zeigt nach Norden.')
+      await expect(player.getByTestId('player-handout-image')).toBeVisible()
+      await expect.poll(async () => {
+        const handout = mapNamed(await readLibrary(userData), 'Demo Map')?.handouts[0]
+        return handout && `${handout.title}:${Boolean(handout.imagePath)}`
+      }).toBe('Geheime Notiz:true')
+
+      await page.getByTestId('live-handout-hide').click()
+      await expect(player.getByTestId('player-handout')).toHaveCount(0)
+      await page.getByTestId('live-message-clear').click()
+      await expect(player.getByTestId('player-notice')).toHaveCount(0)
     } finally {
       await closeMapBerry(app)
     }

@@ -61,6 +61,11 @@ button:hover {
   border-color: rgba(241, 189, 97, 0.55);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 button.active {
   color: #16090e;
   border-color: var(--gold);
@@ -142,6 +147,7 @@ label {
 .splash,
 .player-idle,
 .player-blackout {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
@@ -462,6 +468,14 @@ label {
   width: 250px;
 }
 
+.live-popover {
+  display: grid;
+  width: 360px;
+  max-height: min(680px, calc(100vh - 150px));
+  gap: 10px;
+  overflow: auto;
+}
+
 .draw-settings {
   display: grid;
   gap: 10px;
@@ -545,6 +559,93 @@ label {
 .grid-slider input[type="range"] {
   height: 24px;
   padding: 0;
+}
+
+.live-section {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(247, 230, 175, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.live-section-head,
+.live-actions,
+.live-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-section-head {
+  justify-content: space-between;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.live-section-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.live-section-head strong {
+  color: var(--cream);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented.small {
+  gap: 4px;
+}
+
+.segmented.small button {
+  min-height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.live-inline input:first-child {
+  flex: 1;
+}
+
+.live-inline input:last-child {
+  width: 88px;
+}
+
+.live-actions {
+  flex-wrap: wrap;
+}
+
+.live-actions button {
+  min-height: 30px;
+}
+
+.live-actions .icon-only {
+  min-width: 32px;
+  width: 32px;
+}
+
+.live-popover textarea {
+  min-height: 68px;
+}
+
+.handout-image-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.handout-image-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-menu-button {
@@ -684,6 +785,114 @@ label {
 .player-idle,
 .player-blackout {
   background: #000;
+}
+
+.player-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 16px;
+  padding: min(5vh, 42px);
+  pointer-events: none;
+}
+
+.player-timer,
+.player-notice,
+.player-handout {
+  border: 1px solid rgba(241, 189, 97, 0.34);
+  color: var(--cream);
+  background: rgba(8, 5, 6, 0.88);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(10px);
+}
+
+.player-timer {
+  justify-self: end;
+  display: grid;
+  min-width: 190px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  text-align: right;
+}
+
+.player-timer span,
+.player-notice span,
+.player-handout span {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.player-timer strong {
+  color: white;
+  font-size: 42px;
+  font-weight: 860;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.player-timer.expired strong {
+  color: #ff7aa8;
+}
+
+.player-notice {
+  display: grid;
+  width: min(720px, 86vw);
+  gap: 8px;
+  padding: 18px 22px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.player-notice.alert {
+  border-color: rgba(217, 27, 103, 0.68);
+  background: rgba(61, 4, 28, 0.92);
+}
+
+.player-notice strong {
+  color: white;
+  font-size: 28px;
+  line-height: 1.22;
+}
+
+.player-handout {
+  align-self: center;
+  display: grid;
+  width: min(780px, 82vw);
+  max-height: min(72vh, 760px);
+  gap: 12px;
+  margin-top: min(8vh, 76px);
+  padding: 30px 34px;
+  overflow: auto;
+  border-radius: 10px;
+}
+
+.player-handout h1 {
+  margin: 0;
+  color: white;
+  font-size: 34px;
+  line-height: 1.08;
+}
+
+.player-handout img {
+  max-width: 100%;
+  max-height: min(42vh, 420px);
+  border: 1px solid rgba(241, 189, 97, 0.26);
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.player-handout p {
+  margin: 0;
+  color: #f6e8c4;
+  font-size: 20px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .player-idle img {
