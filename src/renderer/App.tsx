@@ -27,6 +27,7 @@ import {
   RotateCw,
   Ruler,
   ScanLine,
+  Settings,
   Square,
   Trash2,
   Type,
@@ -52,12 +53,17 @@ import { gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '
 import { useAssetImage } from './lib/image'
 import { applyFogOp, createFogCanvas, type FogOp } from './lib/fog'
 import { distance, flattened, polygonCenter, rectFromPoints, screenToMap, uid } from './lib/mapMath'
+import { COPY, type Locale, type Theme } from './i18n'
 import './styles.css'
 
 const DEFAULT_LIBRARY: MapBerryLibrary = { version: 1, maps: [], activeMapId: null }
 const LEAF = '#7fb20d'
 const GOLD = '#f1bd61'
 const DEFAULT_DRAW_COLOR = '#111111'
+const GITHUB_URL = 'https://github.com/RollBerryStudios/MapBerry'
+const ROLLBERRY_URL = 'https://github.com/RollBerryStudios'
+const CONTACT_EMAIL = 'kontakt@rollberry.de'
+const CONTACT_URL = `mailto:${CONTACT_EMAIL}`
 
 const DRAW_COLOR_SWATCHES = [
   { id: 'black', name: 'Schwarz', value: '#111111' },
@@ -126,6 +132,9 @@ export function App() {
   const [playerViewport, setPlayerViewport] = useState<PlayerViewport | null>(null)
   const [playerWindowSize, setPlayerWindowSize] = useState({ w: 1280, h: 720 })
   const [openToolGroup, setOpenToolGroup] = useState<string | null>(null)
+  const [locale, setLocaleState] = useState<Locale>(() => localStorage.getItem('mapberry-locale') === 'en' ? 'en' : 'de')
+  const [theme, setThemeState] = useState<Theme>(() => localStorage.getItem('mapberry-theme') === 'light' ? 'light' : 'dark')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const latestSyncRef = useRef<{ map: MapScene | null; blackout: boolean; viewport: PlayerViewport | null }>({
     map: null,
     blackout: false,
@@ -136,6 +145,17 @@ export function App() {
     () => library.maps.find((map) => map.id === library.activeMapId) ?? null,
     [library.maps, library.activeMapId]
   )
+  const c = COPY[locale]
+
+  function setLocale(next: Locale): void {
+    setLocaleState(next)
+    localStorage.setItem('mapberry-locale', next)
+  }
+
+  function setTheme(next: Theme): void {
+    setThemeState(next)
+    localStorage.setItem('mapberry-theme', next)
+  }
 
   const commit = useCallback((next: MapBerryLibrary, sync = true) => {
     setLibrary(next)
@@ -217,7 +237,7 @@ export function App() {
   async function handleDeleteMap(id: string) {
     const map = library.maps.find((candidate) => candidate.id === id)
     if (!map) return
-    const ok = await window.mapberry.confirm(`Karte "${map.name}" löschen?`, 'Nebel, Räume, Wände und Zeichnungen dieser Karte werden aus MapBerry entfernt.')
+    const ok = await window.mapberry.confirm(c.deleteMapConfirm(map.name), c.deleteMapDetail)
     if (!ok) return
     const maps = library.maps.filter((candidate) => candidate.id !== id)
     commit({ version: 1, maps, activeMapId: maps[0]?.id ?? null })
@@ -260,23 +280,26 @@ export function App() {
   }
 
   if (!ready) {
-    return <div className="splash"><img src={logoUrl} alt="" /><span>MapBerry lädt...</span></div>
+    return <div className="splash"><img src={logoUrl} alt="" /><span>{c.loading}</span></div>
   }
 
   const ActiveToolIcon = findTool(tool)?.icon ?? MousePointer2
 
   return (
-    <div className="app-shell" data-testid="dm-app">
+    <div className="app-shell" data-theme={theme} data-testid="dm-app">
       <header className="titlebar">
         <div className="brand">
           <img src={logoUrl} alt="" />
           <div>
             <strong>MapBerry</strong>
-            <span>{activeMap ? activeMap.name : 'Kartenarbeitsplatz'}</span>
+            <span>{activeMap ? activeMap.name : c.tagline}</span>
           </div>
         </div>
         <div className="window-actions">
-          <button className="icon-only" onClick={() => void window.mapberry.revealData()} title="Datenordner öffnen" aria-label="Datenordner öffnen">
+          <button className="icon-only settings-trigger" onClick={() => setSettingsOpen(true)} title={c.settings} aria-label={c.settings}>
+            <Settings size={18} />
+          </button>
+          <button className="icon-only" onClick={() => void window.mapberry.revealData()} title={c.dataFolder} aria-label={c.dataFolder}>
             <Database size={18} />
           </button>
         </div>
@@ -285,40 +308,40 @@ export function App() {
       <div className="topbar">
         <button className="primary icon-text" data-testid="import-map" onClick={handleImportMap}>
           <Upload size={18} />
-          <span>Karte importieren</span>
+          <span>{c.importMap}</span>
         </button>
         <button className={`icon-text ${playerOpen ? 'active' : ''}`} onClick={togglePlayerWindow}>
           <MonitorUp size={18} />
-          <span>{playerOpen ? 'Spielerfenster an' : 'Spielerfenster'}</span>
+          <span>{playerOpen ? c.playerWindowOn : c.playerWindow}</span>
         </button>
         <button className={`icon-text ${blackout ? 'danger active' : 'danger'}`} onClick={() => setBlackout((value) => !value)}>
           <EyeOff size={18} />
-          <span>Blackout</span>
+          <span>{c.blackout}</span>
         </button>
         <button className={`icon-text ${playerViewport ? 'active gold' : ''}`} onClick={toggleViewport}>
           <Focus size={18} />
-          <span>Spielerrahmen</span>
+          <span>{c.playerFrame}</span>
         </button>
         {playerViewport && (
           <>
-            <button className="icon-only" aria-label="Rahmen kleiner" title="Rahmen kleiner" onClick={() => setPlayerViewport((v) => v ? { ...v, w: v.w * 0.9, h: v.h * 0.9 } : v)}>
+            <button className="icon-only" aria-label={c.smallerFrame} title={c.smallerFrame} onClick={() => setPlayerViewport((v) => v ? { ...v, w: v.w * 0.9, h: v.h * 0.9 } : v)}>
               <Minus size={18} />
             </button>
-            <button className="icon-only" aria-label="Rahmen größer" title="Rahmen größer" onClick={() => setPlayerViewport((v) => v ? { ...v, w: v.w * 1.1, h: v.h * 1.1 } : v)}>
+            <button className="icon-only" aria-label={c.largerFrame} title={c.largerFrame} onClick={() => setPlayerViewport((v) => v ? { ...v, w: v.w * 1.1, h: v.h * 1.1 } : v)}>
               <Plus size={18} />
             </button>
-            <button className="icon-only" aria-label="Rahmen drehen" title="Rahmen drehen" onClick={() => setPlayerViewport((v) => v ? { ...v, rotation: (v.rotation + 90) % 360 } : v)}>
+            <button className="icon-only" aria-label={c.rotateFrame} title={c.rotateFrame} onClick={() => setPlayerViewport((v) => v ? { ...v, rotation: (v.rotation + 90) % 360 } : v)}>
               <RotateCw size={18} />
             </button>
           </>
         )}
         <div className="spacer" />
         <select
-          title="Spieler-Monitor"
+          title={c.monitor}
           onChange={(event) => void window.mapberry.setPlayerMonitor(Number(event.target.value))}
           defaultValue=""
         >
-          <option value="" disabled>Monitor</option>
+          <option value="" disabled>{c.monitor}</option>
           {monitors.map((monitor) => <option key={monitor.id} value={monitor.id}>{monitor.label}</option>)}
         </select>
       </div>
@@ -326,7 +349,7 @@ export function App() {
       <main className="workspace">
         <aside className="panel left-panel">
           <section>
-            <div className="panel-title">Karten</div>
+            <div className="panel-title">{c.maps}</div>
             <div className="map-list">
               {library.maps.map((map) => (
                 <button
@@ -335,7 +358,7 @@ export function App() {
                   onClick={() => commit({ ...library, activeMapId: map.id })}
                 >
                   <span className="map-row-main"><MapIcon size={16} /><span>{map.name}</span></span>
-                  <small>{map.gridType === 'none' ? 'kein Grid' : `${map.gridSize}px`}</small>
+                  <small>{map.gridType === 'none' ? c.noGrid : `${map.gridSize}px`}</small>
                 </button>
               ))}
             </div>
@@ -343,40 +366,40 @@ export function App() {
 
           {activeMap && (
             <section>
-              <div className="panel-title">Grid</div>
-              <label>Name<input value={activeMap.name} onChange={(event) => patchActiveMap({ name: event.target.value })} /></label>
+              <div className="panel-title">{c.grid}</div>
+              <label>{c.name}<input value={activeMap.name} onChange={(event) => patchActiveMap({ name: event.target.value })} /></label>
               <div className="segmented">
                 <button className={activeMap.gridType === 'square' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'square' })}>
                   <Grid3X3 size={16} />
-                  <span>Quadrat</span>
+                  <span>{c.square}</span>
                 </button>
                 <button className={activeMap.gridType === 'hex' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'hex' })}>
                   <Hexagon size={16} />
-                  <span>Hex</span>
+                  <span>{c.hex}</span>
                 </button>
                 <button className={activeMap.gridType === 'none' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'none' })}>
                   <View size={16} />
-                  <span>Aus</span>
+                  <span>{c.off}</span>
                 </button>
               </div>
-              <label>ft pro Feld<input type="number" min="0.5" max="500" step="0.5" value={activeMap.ftPerUnit} onChange={(event) => patchActiveMap({ ftPerUnit: Number(event.target.value) || 5 })} /></label>
-              <label>Dicke<input type="range" min="0.25" max="5" step="0.25" value={activeMap.gridThickness} onChange={(event) => patchActiveMap({ gridThickness: Number(event.target.value) })} /></label>
-              <label className="check"><input type="checkbox" checked={activeMap.gridVisible} onChange={(event) => patchActiveMap({ gridVisible: event.target.checked })} /> Grid sichtbar</label>
-              <label>DM-Ansicht
+              <label>{c.feetPerCell}<input type="number" min="0.5" max="500" step="0.5" value={activeMap.ftPerUnit} onChange={(event) => patchActiveMap({ ftPerUnit: Number(event.target.value) || 5 })} /></label>
+              <label>{c.thickness}<input type="range" min="0.25" max="5" step="0.25" value={activeMap.gridThickness} onChange={(event) => patchActiveMap({ gridThickness: Number(event.target.value) })} /></label>
+              <label className="check"><input type="checkbox" checked={activeMap.gridVisible} onChange={(event) => patchActiveMap({ gridVisible: event.target.checked })} /> {c.gridVisible}</label>
+              <label>{c.dmView}
                 <select value={activeMap.rotation} onChange={(event) => patchActiveMap({ rotation: Number(event.target.value) })}>
-                  {rotationOptions().map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {rotationOptions(c).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>
-              <label>Spieleransicht
+              <label>{c.playerView}
                 <select value={activeMap.rotationPlayer} onChange={(event) => patchActiveMap({ rotationPlayer: Number(event.target.value) })}>
-                  {rotationOptions().map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {rotationOptions(c).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>
               <details className="danger-zone">
-                <summary>Kartenoptionen</summary>
+                <summary>{c.mapOptions}</summary>
                 <button className="danger ghost icon-text" onClick={() => handleDeleteMap(activeMap.id)}>
                   <Trash2 size={17} />
-                  <span>Karte löschen</span>
+                  <span>{c.deleteMap}</span>
                 </button>
               </details>
             </section>
@@ -424,7 +447,7 @@ export function App() {
               <img src={logoUrl} alt="" />
               <button className="primary large icon-text" onClick={handleImportMap}>
                 <Upload size={19} />
-                <span>Erste Karte importieren</span>
+                <span>{c.firstMap}</span>
               </button>
             </div>
           )}
@@ -432,12 +455,12 @@ export function App() {
 
         <aside className="panel right-panel">
           <section>
-            <div className="panel-title">Werkzeug</div>
+            <div className="panel-title">{c.tool}</div>
             <div className="tool-readout">
               <ActiveToolIcon size={21} />
               <strong>{toolLabel(tool)}</strong>
             </div>
-            <label>Nebel-Pinsel<input type="range" min="8" max="220" value={fogBrushRadius} onChange={(event) => setFogBrushRadius(Number(event.target.value))} /></label>
+            <label>{c.fogBrush}<input type="range" min="8" max="220" value={fogBrushRadius} onChange={(event) => setFogBrushRadius(Number(event.target.value))} /></label>
           </section>
           {activeMap && (
             <MapSidePanel
@@ -453,7 +476,84 @@ export function App() {
           )}
         </aside>
       </main>
+      {settingsOpen && (
+        <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
+          <section className="settings-modal" role="dialog" aria-modal="true" aria-label={c.settings} onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <h2>{c.settings}</h2>
+                <p>{c.rollberryTitle}</p>
+              </div>
+              <button className="icon-only" aria-label={c.close} title={c.close} onClick={() => setSettingsOpen(false)}>x</button>
+            </header>
+            <div className="settings-grid">
+              <section>
+                <h3>{c.appearance}</h3>
+                <SegmentedChoice
+                  label={c.language}
+                  value={locale}
+                  options={[
+                    { value: 'de', label: 'Deutsch' },
+                    { value: 'en', label: 'English' },
+                  ]}
+                  onChange={(value) => setLocale(value as Locale)}
+                />
+                <SegmentedChoice
+                  label={c.theme}
+                  value={theme}
+                  options={[
+                    { value: 'dark', label: c.darkMode },
+                    { value: 'light', label: c.lightMode },
+                  ]}
+                  onChange={(value) => setTheme(value as Theme)}
+                />
+              </section>
+              <section>
+                <h3>{c.community}</h3>
+                <p>{c.rollberryInfo}</p>
+                <button onClick={() => window.mapberry.openExternal(CONTACT_URL)}>{CONTACT_EMAIL}</button>
+                <button onClick={() => window.mapberry.openExternal(GITHUB_URL)}>{c.githubRepo}</button>
+                <button onClick={() => window.mapberry.openExternal(ROLLBERRY_URL)}>{c.rollberryGithub}</button>
+              </section>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
+  )
+}
+
+function SegmentedChoice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: Array<{ value: T; label: string }>
+  onChange: (value: T) => void
+}) {
+  return (
+    <label className="setting-choice">
+      <span>{label}</span>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value as T)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      <span className="segmented-control" role="group">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={option.value === value ? 'active' : ''}
+            aria-pressed={option.value === value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </span>
+    </label>
   )
 }
 
@@ -1343,11 +1443,11 @@ function findTool(tool: ToolId) {
   return null
 }
 
-function rotationOptions() {
+function rotationOptions(c: typeof COPY.de) {
   return [
-    { value: 0, label: 'Keine Rotation' },
-    { value: 90, label: '90 Grad im Uhrzeigersinn' },
-    { value: 180, label: '180 Grad' },
-    { value: 270, label: '270 Grad im Uhrzeigersinn' }
+    { value: 0, label: c.noRotation },
+    { value: 90, label: c.rotate90 },
+    { value: 180, label: c.rotate180 },
+    { value: 270, label: c.rotate270 }
   ]
 }

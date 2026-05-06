@@ -15,6 +15,61 @@ import {
 } from './helpers'
 
 test.describe('MapBerry Electron map workflow', () => {
+  test('opens settings with German dark defaults and keeps suite links available', async ({}, testInfo) => {
+    const userData = await freshUserData(testInfo)
+    const { app, page } = await launchMapBerry(userData)
+    try {
+      await expect(page.locator('.app-shell')).toHaveAttribute('data-theme', 'dark')
+      await page.getByRole('button', { name: 'Einstellungen' }).click()
+      await expect(page.getByRole('dialog', { name: 'Einstellungen' })).toBeVisible()
+      await expect(page.getByLabel('Sprache')).toHaveValue('de')
+      await expect(page.getByLabel('Design')).toHaveValue('dark')
+      await expect(page.getByRole('button', { name: 'kontakt@rollberry.de' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'GitHub-Repository' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'RollBerry Studios auf GitHub' })).toBeVisible()
+      await expect(page).toHaveScreenshot('mapberry-settings-dark-de.png', { fullPage: true })
+
+      await page.getByRole('button', { name: 'English' }).click()
+      await page.getByRole('button', { name: 'Light' }).click()
+      await expect(page.locator('.app-shell')).toHaveAttribute('data-theme', 'light')
+      await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'GitHub repository' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'RollBerry Studios on GitHub' })).toBeVisible()
+      await expect.poll(() => page.evaluate(() => ({
+        locale: localStorage.getItem('mapberry-locale'),
+        theme: localStorage.getItem('mapberry-theme')
+      }))).toEqual({ locale: 'en', theme: 'light' })
+      await page.getByRole('button', { name: 'Close' }).click()
+      await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible()
+    } finally {
+      await closeMapBerry(app)
+    }
+  })
+
+  test('keeps desktop and narrow layouts bounded and screenshot-stable', async ({}, testInfo) => {
+    const userData = await freshUserData(testInfo)
+    const { app, page } = await launchMapBerry(userData)
+    try {
+      await assertVisibleLayout(page)
+      await assertNoUnexpectedOverlaps(page)
+      await expect(page).toHaveScreenshot('mapberry-desktop-layout.png', { fullPage: true })
+
+      await page.setViewportSize({ width: 900, height: 760 })
+      await page.waitForTimeout(100)
+      await assertVisibleLayout(page)
+      await assertNoUnexpectedOverlaps(page)
+      await expect(page).toHaveScreenshot('mapberry-responsive-layout.png', { fullPage: true })
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.waitForTimeout(100)
+      await assertVisibleLayout(page)
+      await assertNoUnexpectedOverlaps(page)
+      await expect(page).toHaveScreenshot('mapberry-mobile-390.png', { fullPage: true })
+    } finally {
+      await closeMapBerry(app)
+    }
+  })
+
   test('imports a map image into isolated app storage', async ({}, testInfo) => {
     const userData = await freshUserData(testInfo)
     const { app, page } = await launchMapBerry(userData)
@@ -217,4 +272,110 @@ async function setRange(locator: Locator, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
+}
+
+async function assertVisibleLayout(page: import('@playwright/test').Page): Promise<void> {
+  const failures = await page.evaluate(() => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight }
+    const selectors = [
+      '.titlebar',
+      '.brand',
+      '.window-actions',
+      '.topbar',
+      '.workspace',
+      '.panel',
+      '.map-surface',
+      '.tool-dock',
+      '.floating-fog',
+      'button',
+      'input',
+      'select',
+      'textarea'
+    ]
+    const result: string[] = []
+    const seen = new Set<Element>()
+    for (const selector of selectors) {
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        if (seen.has(element)) continue
+        seen.add(element)
+        const style = window.getComputedStyle(element)
+        if (style.display === 'none' || style.visibility === 'hidden') continue
+        const rect = element.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) result.push(`${selector} has empty bounds`)
+        if (rect.bottom < -1 || rect.top > viewport.height + 1) continue
+        if (rect.left < -1 || rect.right > viewport.width + 1) result.push(`${selector} overflows horizontally: ${JSON.stringify(rect.toJSON())}`)
+        if (element instanceof HTMLButtonElement && element.scrollWidth > element.clientWidth + 2) result.push(`button text clips: ${element.textContent?.trim()}`)
+        if (element.matches('button, input, select, textarea') && !element.closest('.panel, .tool-dock')) {
+          const clippedBy = clippedByHiddenAncestor(element, rect)
+          if (clippedBy) result.push(`${selector} is clipped by ${clippedBy}: ${element.textContent?.trim().slice(0, 40)}`)
+        }
+      }
+    }
+
+    function clippedByHiddenAncestor(element: Element, elementRect: DOMRect): string | null {
+      let clip = {
+        left: elementRect.left,
+        right: elementRect.right,
+        top: elementRect.top,
+        bottom: elementRect.bottom,
+      }
+      for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+        if (parent.id === 'root' || parent.classList.contains('app-shell')) continue
+        const style = window.getComputedStyle(parent)
+        const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip'
+        const clipsY = style.overflowY === 'hidden' || style.overflowY === 'clip'
+        if (!clipsX && !clipsY) continue
+        const parentRect = parent.getBoundingClientRect()
+        clip = {
+          left: clipsX ? Math.max(clip.left, parentRect.left) : clip.left,
+          right: clipsX ? Math.min(clip.right, parentRect.right) : clip.right,
+          top: clipsY ? Math.max(clip.top, parentRect.top) : clip.top,
+          bottom: clipsY ? Math.min(clip.bottom, parentRect.bottom) : clip.bottom,
+        }
+        if (clip.right < elementRect.right - 2 || clip.left > elementRect.left + 2 || clip.bottom < elementRect.bottom - 2 || clip.top > elementRect.top + 2) {
+          return parent.className || parent.tagName.toLowerCase()
+        }
+      }
+      return null
+    }
+
+    return result
+  })
+  expect(failures).toEqual([])
+}
+
+async function assertNoUnexpectedOverlaps(page: import('@playwright/test').Page): Promise<void> {
+  const failures = await page.evaluate(() => {
+    const groups = [
+      '.titlebar > *',
+      '.window-actions > *',
+      '.topbar > *',
+      '.workspace > *',
+      '.segmented > button',
+      '.map-list > button',
+      '.floating-fog > button',
+      '.settings-modal header > *'
+    ]
+    const result: string[] = []
+    for (const group of groups) {
+      const rects = Array.from(document.querySelectorAll(group))
+        .filter((element) => {
+          const style = window.getComputedStyle(element)
+          return style.display !== 'none' && style.visibility !== 'hidden'
+        })
+        .map((element) => ({ text: element.textContent?.trim() || element.getAttribute('aria-label') || group, rect: element.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.width > 0 && rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight)
+      for (let i = 0; i < rects.length; i += 1) {
+        for (let j = i + 1; j < rects.length; j += 1) {
+          const a = rects[i]
+          const b = rects[j]
+          const overlapX = Math.min(a.rect.right, b.rect.right) - Math.max(a.rect.left, b.rect.left)
+          const overlapY = Math.min(a.rect.bottom, b.rect.bottom) - Math.max(a.rect.top, b.rect.top)
+          if (overlapX > 2 && overlapY > 2) result.push(`${group} overlaps: ${a.text} / ${b.text}`)
+        }
+      }
+    }
+    return result
+  })
+  expect(failures).toEqual([])
 }

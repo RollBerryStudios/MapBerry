@@ -6,7 +6,7 @@
   "homepage": ".",
   "author": {
     "name": "RollBerry Studios",
-    "email": "rollberry@proton.me"
+    "email": "kontakt@rollberry.de"
   },
   "license": "MIT",
   "scripts": {
@@ -21,11 +21,13 @@
     "build:preload": "node scripts/build-preload.mjs",
     "build:renderer": "vite build --config vite.config.ts",
     "electron": "cross-env NODE_ENV=production electron dist/main/main.js",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "test:e2e": "npm run build && playwright test",
-    "test:e2e:headed": "npm run build && playwright test --headed",
-    "test:e2e:report": "playwright show-report"
+    "builder": "node scripts/run-electron-builder.mjs",
+    "pack": "npm run build && npm run builder -- --dir",
+    "dist": "npm run build && npm run builder --",
+    "test:e2e": "npm run build && node scripts/run-playwright.mjs test",
+    "test:e2e:headed": "npm run build && node scripts/run-playwright.mjs test --headed",
+    "test:e2e:update": "npm run build && node scripts/run-playwright.mjs test --update-snapshots",
+    "test:e2e:report": "node scripts/run-playwright.mjs show-report"
   },
   "dependencies": {
     "konva": "^9.3.6",
