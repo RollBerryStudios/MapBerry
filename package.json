@@ -1,0 +1,53 @@
+{
+  "name": "mapberry",
+  "version": "0.1.0",
+  "description": "MapBerry - lightweight standalone map table for local tabletop rounds",
+  "main": "dist/main/main.js",
+  "homepage": ".",
+  "author": {
+    "name": "RollBerry Studios",
+    "email": "rollberry@proton.me"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -n main,preload,renderer,electron \"npm run dev:main\" \"npm run dev:preload\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev:preload": "node scripts/build-preload.mjs --watch",
+    "dev:renderer": "vite --config vite.config.ts",
+    "dev:electron": "wait-on http://localhost:5176 dist/main/main.js dist/preload/preload.js && cross-env NODE_ENV=development electronmon dist/main/main.js",
+    "build": "npm run build:main && npm run typecheck:preload && npm run build:preload && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "typecheck:preload": "tsc -p tsconfig.preload.json --noEmit",
+    "build:preload": "node scripts/build-preload.mjs",
+    "build:renderer": "vite build --config vite.config.ts",
+    "electron": "cross-env NODE_ENV=production electron dist/main/main.js",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:headed": "npm run build && playwright test --headed",
+    "test:e2e:report": "playwright show-report"
+  },
+  "dependencies": {
+    "konva": "^9.3.6",
+    "lucide-react": "^1.14.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-konva": "^18.2.10"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "41.2.2",
+    "electron-builder": "^26.0.0",
+    "electronmon": "^2.0.4",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "wait-on": "^9.0.4"
+  }
+}

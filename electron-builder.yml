@@ -1,0 +1,65 @@
+appId: com.rollberrystudios.mapberry
+productName: MapBerry
+copyright: Copyright 2026 RollBerry Studios
+
+extraMetadata:
+  main: dist/main/main.js
+  name: mapberry
+  productName: MapBerry
+  description: Lightweight standalone map table for local tabletop rounds
+
+directories:
+  output: release
+  buildResources: resources
+
+extraResources:
+  - from: resources/demo-map.png
+    to: demo-map.png
+
+files:
+  - dist/main/**/*
+  - dist/preload/**/*
+  - dist/renderer/**/*
+  - node_modules/**/*
+  - package.json
+  - "!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!node_modules/**/{test,__tests__,tests,powered-test,example,examples}"
+  - "!node_modules/.bin"
+  - "!**/*.map"
+  - "!src/**"
+  - "!**/*.ts"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: resources/MapBerry.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: MapBerry
+  runAfterFinish: true
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  icon: resources/MapBerry.png
+  category: public.app-category.entertainment
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  identity: null
+  notarize: false
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: resources/MapBerry.png
+  category: Game
+  description: Lightweight standalone map table for local tabletop rounds
