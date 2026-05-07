@@ -222,6 +222,19 @@ function saveLibrary(library: MapBerryLibrary): boolean {
   return true
 }
 
+function safeExternalUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    if (url.protocol === 'mailto:' && url.pathname === 'kontakt@rollberry.de') return url.toString()
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return null
+    if (url.pathname !== '/RollBerryStudios' && !url.pathname.startsWith('/RollBerryStudios/')) return null
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 function hasValidImageMagic(buf: Buffer, ext: string): boolean {
   switch (ext.toLowerCase()) {
     case '.png': return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
@@ -414,6 +427,12 @@ function registerIpc(): void {
     return `data:${mime};base64,${buf.toString('base64')}`
   })
   ipcMain.handle('mapberry:reveal-data', async () => shell.openPath(userDataPath()))
+  ipcMain.handle('mapberry:open-external', async (_event, url: string) => {
+    const safeUrl = safeExternalUrl(url)
+    if (!safeUrl) return false
+    await shell.openExternal(safeUrl)
+    return true
+  })
   ipcMain.handle('mapberry:get-monitors', () => displayInfos())
   ipcMain.handle('mapberry:set-player-monitor', (_event, displayId: number) => {
     playerDisplayId = displayId
@@ -462,7 +481,7 @@ function createDMWindow(): void {
     show: false,
     frame: false,
     titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',
-    ...(isDarwin ? {} : { titleBarOverlay: { color: '#08070a', symbolColor: '#f3c46a', height: 36 } }),
+    ...(isDarwin ? { trafficLightPosition: { x: 16, y: 16 } } : { titleBarOverlay: { color: '#08070a', symbolColor: '#f3c46a', height: 36 } }),
     webPreferences: {
       preload,
       contextIsolation: true,

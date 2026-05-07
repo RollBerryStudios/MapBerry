@@ -10,6 +10,7 @@ export interface MapBerryAPI {
   confirm: (message: string, detail?: string) => Promise<boolean>
   getAssetDataUrl: (assetPath: string) => Promise<string | null>
   revealData: () => Promise<string>
+  openExternal: (url: string) => Promise<boolean>
   getMonitors: () => Promise<DisplayInfo[]>
   setPlayerMonitor: (displayId: number) => Promise<boolean>
   openPlayerWindow: () => Promise<boolean>
@@ -43,6 +44,7 @@ const dmApi: MapBerryAPI = {
   confirm: (message, detail) => ipcRenderer.invoke('mapberry:confirm', message, detail),
   getAssetDataUrl: (assetPath) => ipcRenderer.invoke('mapberry:get-asset-data-url', assetPath),
   revealData: () => ipcRenderer.invoke('mapberry:reveal-data'),
+  openExternal: (url) => ipcRenderer.invoke('mapberry:open-external', url),
   getMonitors: () => ipcRenderer.invoke('mapberry:get-monitors'),
   setPlayerMonitor: (displayId) => ipcRenderer.invoke('mapberry:set-player-monitor', displayId),
   openPlayerWindow: () => ipcRenderer.invoke('mapberry:open-player-window'),
