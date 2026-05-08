@@ -30,7 +30,6 @@ export type ToolId =
   | 'fog-brush-cover'
   | 'fog-rect'
   | 'fog-cover'
-  | 'fog-polygon'
   | 'draw-freehand'
   | 'draw-rect'
   | 'draw-circle'

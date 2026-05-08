@@ -35,6 +35,13 @@ export function applyFogOp(canvas: HTMLCanvasElement, op: FogOp) {
   ctx.fillStyle = 'rgba(0, 0, 0, 1)'
   beginShape(ctx, op)
   ctx.fill()
+  if (op.mode === 'reveal') {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 1)'
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.lineWidth = op.shape === 'polygon' ? 10 : 4
+    ctx.stroke()
+  }
   ctx.restore()
 }
 

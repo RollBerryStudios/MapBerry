@@ -7,7 +7,6 @@ import {
   CircleDashed,
   Clock3,
   Contrast,
-  Database,
   DoorOpen,
   Eraser,
   Eye,
@@ -25,7 +24,6 @@ import {
   MousePointer2,
   Paintbrush,
   Pause,
-  Pentagon,
   Play,
   Plus,
   RectangleHorizontal,
@@ -107,8 +105,7 @@ const TOOL_GROUPS: Array<{ label: string; tools: Array<{ id: ToolId; icon: Lucid
     { id: 'fog-brush', icon: Eye, label: 'Aufdecken' },
     { id: 'fog-brush-cover', icon: EyeOff, label: 'Verdecken' },
     { id: 'fog-rect', icon: ScanLine, label: 'Rechteck auf' },
-    { id: 'fog-cover', icon: Square, label: 'Rechteck zu' },
-    { id: 'fog-polygon', icon: Pentagon, label: 'Polygon auf' }
+    { id: 'fog-cover', icon: Square, label: 'Rechteck zu' }
   ] },
   { label: 'Malen', tools: [
     { id: 'draw-freehand', icon: Paintbrush, label: 'Freihand' },
@@ -163,6 +160,9 @@ export function App() {
   const [locale, setLocaleState] = useState<Locale>(() => localStorage.getItem('mapberry-locale') === 'en' ? 'en' : 'de')
   const [theme, setThemeState] = useState<Theme>(() => localStorage.getItem('mapberry-theme') === 'light' ? 'light' : 'dark')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [shortcutBlockedByCanvas, setShortcutBlockedByCanvas] = useState(false)
+  const gridShortcutArmedRef = useRef(false)
+  const gridShortcutTimerRef = useRef<number | null>(null)
   const latestSyncRef = useRef<{ map: MapScene | null; blackout: boolean; viewport: PlayerViewport | null; overlay: PlayerOverlayState }>({
     map: null,
     blackout: false,
@@ -295,15 +295,156 @@ export function App() {
   }, [activeMap?.id, activeMap?.handouts.length, selectedHandoutId])
 
   useEffect(() => {
+    function clearGridShortcut() {
+      gridShortcutArmedRef.current = false
+      if (gridShortcutTimerRef.current !== null) {
+        window.clearTimeout(gridShortcutTimerRef.current)
+        gridShortcutTimerRef.current = null
+      }
+    }
+
+    function armGridShortcut() {
+      clearGridShortcut()
+      gridShortcutArmedRef.current = true
+      gridShortcutTimerRef.current = window.setTimeout(clearGridShortcut, 1200)
+    }
+
+    function rotate(value: number) {
+      return (value + 90) % 360
+    }
+
+    function handleGridShortcut(event: KeyboardEvent): boolean {
+      if (!activeMap) return false
+      const key = normalizedShortcutKey(event)
+      const coarse = event.shiftKey ? 10 : 1
+      const lineStep = event.shiftKey ? 0.5 : 0.25
+      if (isPlusKey(event)) {
+        patchActiveMap({ gridSize: Math.min(400, activeMap.gridSize + coarse) })
+        return true
+      }
+      if (isMinusKey(event)) {
+        patchActiveMap({ gridSize: Math.max(8, activeMap.gridSize - coarse) })
+        return true
+      }
+      if (key === 'c') {
+        patchActiveMap({ gridColor: nextGridColor(activeMap.gridColor) })
+        return true
+      }
+      if (key === 'v') {
+        patchActiveMap(activeMap.gridType === 'none'
+          ? { gridType: 'square', gridVisible: true }
+          : { gridVisible: !activeMap.gridVisible })
+        return true
+      }
+      if (key === '0') {
+        patchActiveMap({ gridType: 'none', gridVisible: false })
+        return true
+      }
+      if (key === '1') {
+        patchActiveMap({ gridType: 'square', gridVisible: true })
+        return true
+      }
+      if (key === '2') {
+        patchActiveMap({ gridType: 'hex', gridVisible: true })
+        return true
+      }
+      if (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright') {
+        const offsetStep = event.shiftKey ? 10 : 1
+        patchActiveMap({
+          gridOffsetX: activeMap.gridOffsetX + (key === 'arrowleft' ? -offsetStep : key === 'arrowright' ? offsetStep : 0),
+          gridOffsetY: activeMap.gridOffsetY + (key === 'arrowup' ? -offsetStep : key === 'arrowdown' ? offsetStep : 0)
+        })
+        return true
+      }
+      if (key === '.') {
+        patchActiveMap({ gridThickness: Math.min(5, Number((activeMap.gridThickness + lineStep).toFixed(2))) })
+        return true
+      }
+      if (key === ',') {
+        patchActiveMap({ gridThickness: Math.max(0.25, Number((activeMap.gridThickness - lineStep).toFixed(2))) })
+        return true
+      }
+      if (key === 'd') {
+        patchActiveMap({ rotation: rotate(activeMap.rotation) })
+        return true
+      }
+      if (key === 's') {
+        patchActiveMap({ rotationPlayer: rotate(activeMap.rotationPlayer) })
+        return true
+      }
+      if (key === 'o') {
+        setOpenToolGroup((group) => group === 'grid' ? null : 'grid')
+        return true
+      }
+      return false
+    }
+
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (shouldIgnoreShortcutEvent(event) || settingsOpen) return
+      const key = normalizedShortcutKey(event)
+      if (key === 'escape') {
+        clearGridShortcut()
         setOpenToolGroup(null)
         setTool('select')
+        event.preventDefault()
+        return
+      }
+      if (event.altKey || event.metaKey || event.ctrlKey || shortcutBlockedByCanvas) return
+      if (gridShortcutArmedRef.current) {
+        if (handleGridShortcut(event)) {
+          clearGridShortcut()
+          event.preventDefault()
+        }
+        return
+      }
+      if (key === 'g') {
+        armGridShortcut()
+        event.preventDefault()
+        return
+      }
+      if (key === 'h') {
+        setTool('select')
+        setOpenToolGroup(null)
+        event.preventDefault()
+        return
+      }
+      if (key === 'p') {
+        setTool('pointer')
+        setOpenToolGroup(null)
+        event.preventDefault()
+        return
+      }
+      if (key === 'b') {
+        setBlackout((value) => !value)
+        event.preventDefault()
+        return
+      }
+      if (key === 'f') {
+        setOpenToolGroup((group) => group === 'fog' ? null : 'fog')
+        event.preventDefault()
+        return
+      }
+      if (key === 'd') {
+        setOpenToolGroup((group) => group === 'draw' ? null : 'draw')
+        event.preventDefault()
+        return
+      }
+      if (key === 'r') {
+        setOpenToolGroup((group) => group === 'structure' ? null : 'structure')
+        event.preventDefault()
+        return
+      }
+      if (key === 'l' && activeMap) {
+        toggleViewport()
+        event.preventDefault()
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+    return () => {
+      clearGridShortcut()
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [activeMap, settingsOpen, shortcutBlockedByCanvas])
 
   async function handleImportMap() {
     const map = await window.mapberry.importMap()
@@ -492,9 +633,6 @@ export function App() {
           <button className="icon-only settings-trigger" onClick={() => setSettingsOpen(true)} title={c.settings} aria-label={c.settings}>
             <Settings size={18} />
           </button>
-          <button className="icon-only" onClick={() => void window.mapberry.revealData()} title={c.dataFolder} aria-label={c.dataFolder}>
-            <Database size={18} />
-          </button>
         </div>
       </header>
 
@@ -583,6 +721,8 @@ export function App() {
                 drawColor={drawColor}
                 drawWidth={drawWidth}
                 fogBrushRadius={fogBrushRadius}
+                onDrawWidth={setDrawWidth}
+                onFogBrushRadius={setFogBrushRadius}
                 selectedRoomId={selectedRoomId}
                 selectedWallId={selectedWallId}
                 selectedDrawingId={selectedDrawingId}
@@ -594,6 +734,7 @@ export function App() {
                 onWallSelect={selectWall}
                 onDrawingSelect={selectDrawing}
                 onCancelTool={() => setTool('select')}
+                onShortcutBlockChange={setShortcutBlockedByCanvas}
               />
               <ToolDock
                 tool={tool}
@@ -1430,6 +1571,8 @@ function MapCanvas({
   drawColor,
   drawWidth,
   fogBrushRadius,
+  onDrawWidth,
+  onFogBrushRadius,
   selectedRoomId,
   selectedWallId,
   selectedDrawingId,
@@ -1440,13 +1583,16 @@ function MapCanvas({
   onRoomSelect,
   onWallSelect,
   onDrawingSelect,
-  onCancelTool
+  onCancelTool,
+  onShortcutBlockChange
 }: {
   map: MapScene
   tool: ToolId
   drawColor: string
   drawWidth: number
   fogBrushRadius: number
+  onDrawWidth: (width: number) => void
+  onFogBrushRadius: (radius: number) => void
   selectedRoomId: string | null
   selectedWallId: string | null
   selectedDrawingId: string | null
@@ -1458,6 +1604,7 @@ function MapCanvas({
   onWallSelect: (id: string | null) => void
   onDrawingSelect: (id: string | null) => void
   onCancelTool: () => void
+  onShortcutBlockChange: (blocked: boolean) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -1474,6 +1621,8 @@ function MapCanvas({
   const [fogVersion, setFogVersion] = useState(0)
   const [measure, setMeasure] = useState<PlayerMeasure | null>(null)
   const [pointer, setPointer] = useState<PlayerPointer | null>(null)
+  const [mapHoverPoint, setMapHoverPoint] = useState<{ x: number; y: number } | null>(null)
+  const lastFogPointRef = useRef<{ x: number; y: number } | null>(null)
   const dmFogCanvas = useMemo(
     () => tintFogSource(fogCanvas, fogCanvas?.width ?? 0, fogCanvas?.height ?? 0, '#ff453a', Math.min(0.48, (map.fogOpacity ?? 1) * 0.48)),
     [fogCanvas, fogVersion, map.fogOpacity]
@@ -1515,7 +1664,13 @@ function MapCanvas({
   }, [map.id, map.width, map.height, map.fogBitmap])
 
   useEffect(() => {
+    onShortcutBlockChange(Boolean(isPanning || dragStart || roomPoints.length > 0))
+    return () => onShortcutBlockChange(false)
+  }, [isPanning, dragStart, roomPoints.length, onShortcutBlockChange])
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (shouldIgnoreShortcutEvent(event)) return
       if (event.key === 'Enter' && roomPoints.length >= 3) finishRoom()
       if (event.key === 'Escape') {
         setRoomPoints([])
@@ -1534,7 +1689,9 @@ function MapCanvas({
     const stage = stageRef.current
     const pos = stage?.getPointerPosition()
     if (!pos) return null
-    return screenToMap(pos.x, pos.y, transform)
+    const mapPoint = screenToMap(pos.x, pos.y, transform)
+    setMapHoverPoint(mapPoint)
+    return mapPoint
   }
 
   function handleWheel(event: Konva.KonvaEventObject<WheelEvent>) {
@@ -1550,6 +1707,19 @@ function MapCanvas({
         h: Math.max(90, Math.min((map.height || imageSize.height || 2000) * 1.5, playerViewport.h * factor))
       })
       return
+    }
+    if (event.evt.shiftKey) {
+      const point = screenToMap(pointer.x, pointer.y, transform)
+      setMapHoverPoint(point)
+      const direction = event.evt.deltaY > 0 ? -1 : 1
+      if (tool === 'fog-brush' || tool === 'fog-brush-cover') {
+        onFogBrushRadius(Math.max(8, Math.min(220, fogBrushRadius + direction * 6)))
+        return
+      }
+      if (tool.startsWith('draw-')) {
+        onDrawWidth(Math.max(1, Math.min(8, drawWidth + direction)))
+        return
+      }
     }
     const before = screenToMap(pointer.x, pointer.y, transform)
     const factor = event.evt.deltaY > 0 ? 0.9 : 1.1
@@ -1572,7 +1742,8 @@ function MapCanvas({
       const ping = { x: pos.x, y: pos.y }
       setPointer(ping)
       window.mapberry.sendPointer(ping)
-      setTimeout(() => setPointer(null), 900)
+      playPingSound()
+      setTimeout(() => setPointer(null), 1400)
       return
     }
     if (tool === 'draw-text') {
@@ -1588,7 +1759,7 @@ function MapCanvas({
       }
       return
     }
-    if (tool === 'room' || tool === 'fog-polygon') {
+    if (tool === 'room') {
       setRoomPoints((points) => [...points, { x: Math.round(pos.x), y: Math.round(pos.y) }])
       setPolygonPreviewPoint(null)
       return
@@ -1597,13 +1768,15 @@ function MapCanvas({
     setDragCurrent(pos)
     if (tool === 'draw-freehand') setPath([pos.x, pos.y])
     if (tool === 'fog-brush' || tool === 'fog-brush-cover') {
-      applyFog({ mode: tool === 'fog-brush' ? 'reveal' : 'cover', shape: 'circle', points: [pos.x, pos.y, fogBrushRadius] }, false)
+      lastFogPointRef.current = pos
+      paintFogBrush(pos, pos)
     }
   }
 
   function handleMouseMove(event: Konva.KonvaEventObject<MouseEvent>) {
     const pos = stagePoint()
     if (!pos) return
+    setMapHoverPoint(pos)
     if (isPanning) {
       setTransform((current) => ({
         ...current,
@@ -1612,14 +1785,15 @@ function MapCanvas({
       }))
       return
     }
-    if ((tool === 'room' || tool === 'fog-polygon') && roomPoints.length > 0) {
+    if (tool === 'room' && roomPoints.length > 0) {
       setPolygonPreviewPoint({ x: Math.round(pos.x), y: Math.round(pos.y) })
     }
     if (!dragStart) return
     setDragCurrent(pos)
     if (tool === 'draw-freehand') setPath((points) => [...points, pos.x, pos.y])
     if (tool === 'fog-brush' || tool === 'fog-brush-cover') {
-      applyFog({ mode: tool === 'fog-brush' ? 'reveal' : 'cover', shape: 'circle', points: [pos.x, pos.y, fogBrushRadius] }, false)
+      paintFogBrush(lastFogPointRef.current ?? dragStart, pos)
+      lastFogPointRef.current = pos
     }
     if (tool === 'measure-line' || tool === 'measure-circle') {
       const m = buildMeasure(tool, dragStart, pos, map.gridSize, map.ftPerUnit)
@@ -1653,6 +1827,7 @@ function MapCanvas({
     }
     if (tool === 'measure-line' || tool === 'measure-circle') window.mapberry.sendMeasure(measure)
     if (tool === 'fog-brush' || tool === 'fog-brush-cover') persistFog()
+    lastFogPointRef.current = null
     setDragStart(null)
     setDragCurrent(null)
     setPath([])
@@ -1660,11 +1835,6 @@ function MapCanvas({
 
   function handleDoubleClick() {
     if (tool === 'room' && roomPoints.length >= 3) finishRoom()
-    if (tool === 'fog-polygon' && roomPoints.length >= 3) {
-      applyFog({ mode: 'reveal', shape: 'polygon', points: flattened(roomPoints) }, true)
-      setRoomPoints([])
-      setPolygonPreviewPoint(null)
-    }
   }
 
   function finishRoom() {
@@ -1695,6 +1865,27 @@ function MapCanvas({
     if (persist) persistFog()
   }
 
+  function paintFogBrush(from: { x: number; y: number }, to: { x: number; y: number }) {
+    if (!fogCanvas) return
+    const mode = tool === 'fog-brush' ? 'reveal' : 'cover'
+    const length = distance(from, to)
+    const step = Math.max(2, fogBrushRadius * 0.35)
+    const count = Math.max(1, Math.ceil(length / step))
+    for (let i = 0; i <= count; i += 1) {
+      const t = count === 0 ? 1 : i / count
+      applyFogOp(fogCanvas, {
+        mode,
+        shape: 'circle',
+        points: [
+          from.x + (to.x - from.x) * t,
+          from.y + (to.y - from.y) * t,
+          fogBrushRadius
+        ]
+      })
+    }
+    setFogVersion((value) => value + 1)
+  }
+
   function persistFog() {
     if (!fogCanvas) return
     const dataUrl = fogCanvas.toDataURL('image/png')
@@ -1712,6 +1903,7 @@ function MapCanvas({
       ref={containerRef}
       className={`canvas-host ${isPanning ? 'is-panning' : tool === 'select' ? 'is-pan-tool' : 'is-precision-tool'}`}
       data-testid="map-canvas-host"
+      data-ping-active={pointer ? 'true' : 'false'}
       onContextMenu={(event) => event.preventDefault()}
     >
       <Stage
@@ -1722,6 +1914,10 @@ function MapCanvas({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+          setMapHoverPoint(null)
+          lastFogPointRef.current = null
+        }}
         onDblClick={handleDoubleClick}
       >
         <Layer>
@@ -1735,8 +1931,9 @@ function MapCanvas({
             {tool === 'draw-freehand' && path.length >= 4 && <Line points={path} stroke={drawColor} strokeWidth={drawingStroke(drawWidth, transform.scale)} lineCap="round" lineJoin="round" listening={false} />}
             {roomPoints.length > 0 && <PolygonDraft points={roomPoints} previewPoint={polygonPreviewPoint} scale={transform.scale} tool={tool} />}
             {previewPoints.length > 0 && <Preview tool={tool} points={previewPoints} color={drawColor} width={drawWidth} scale={transform.scale} />}
+            {mapHoverPoint && <ToolCursorPreview point={mapHoverPoint} tool={tool} fogBrushRadius={fogBrushRadius} drawWidth={drawWidth} drawColor={drawColor} scale={transform.scale} />}
             {playerViewport && <PlayerViewportFrame viewport={playerViewport} scale={transform.scale} onChange={onViewportChange} />}
-            {pointer && <Circle x={pointer.x} y={pointer.y} radius={screenPx(28, transform.scale)} stroke={GOLD} strokeWidth={screenPx(4, transform.scale)} />}
+            {pointer && <PingShape pointer={pointer} scale={transform.scale} />}
           </Group>
         </Layer>
       </Stage>
@@ -1838,7 +2035,7 @@ function PolygonDraft({
   scale: number
   tool: ToolId
 }) {
-  const stroke = tool === 'fog-polygon' ? '#34c759' : GOLD
+  const stroke = GOLD
   const displayPoints = [
     ...points,
     ...(previewPoint ? [previewPoint] : []),
@@ -1944,6 +2141,63 @@ function Preview({ tool, points, color, width, scale }: { tool: ToolId; points: 
   if (tool === 'measure-line') return <Line points={points} stroke={GOLD} strokeWidth={screenPx(TOOL_PREVIEW_STROKE, scale)} dash={dash} listening={false} />
   if (tool === 'wall' || tool === 'door') return <Line points={points} stroke={tool === 'door' ? '#d47b1f' : '#f7f1cf'} strokeWidth={screenPx(WALL_STROKE, scale)} dash={screenDash([6, 3], scale)} listening={false} />
   return null
+}
+
+function ToolCursorPreview({
+  point,
+  tool,
+  fogBrushRadius,
+  drawWidth,
+  drawColor,
+  scale
+}: {
+  point: { x: number; y: number }
+  tool: ToolId
+  fogBrushRadius: number
+  drawWidth: number
+  drawColor: string
+  scale: number
+}) {
+  if (tool === 'fog-brush' || tool === 'fog-brush-cover') {
+    const reveal = tool === 'fog-brush'
+    return (
+      <Circle
+        x={point.x}
+        y={point.y}
+        radius={fogBrushRadius}
+        stroke={reveal ? '#34c759' : '#ff453a'}
+        strokeWidth={screenPx(2, scale)}
+        dash={screenDash([8, 6], scale)}
+        fill={reveal ? 'rgba(52, 199, 89, 0.10)' : 'rgba(255, 69, 58, 0.12)'}
+        listening={false}
+      />
+    )
+  }
+  if (tool.startsWith('draw-')) {
+    return (
+      <Circle
+        x={point.x}
+        y={point.y}
+        radius={Math.max(screenPx(10, scale), drawingStroke(drawWidth, scale) * 1.6)}
+        stroke={tool === 'draw-erase' ? '#ff453a' : drawColor}
+        strokeWidth={screenPx(2, scale)}
+        dash={screenDash([6, 4], scale)}
+        listening={false}
+      />
+    )
+  }
+  return null
+}
+
+function PingShape({ pointer, scale }: { pointer: PlayerPointer; scale: number }) {
+  return (
+    <Group listening={false}>
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(44, scale)} stroke={GOLD} strokeWidth={screenPx(3, scale)} opacity={0.42} />
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(28, scale)} stroke={GOLD} strokeWidth={screenPx(4, scale)} opacity={0.94} />
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(10, scale)} fill="#9b124f" stroke="#f7f1cf" strokeWidth={screenPx(3, scale)} />
+      <Text x={pointer.x + screenPx(16, scale)} y={pointer.y - screenPx(10, scale)} text="PING" fill={GOLD} fontSize={screenPx(13, scale)} fontStyle="bold" />
+    </Group>
+  )
 }
 
 function PlayerViewportFrame({ viewport, scale, onChange }: { viewport: PlayerViewport; scale: number; onChange: (viewport: PlayerViewport | null) => void }) {
@@ -2151,6 +2405,48 @@ function sendFullSync(map: MapScene | null, blackout: boolean, viewport: PlayerV
 
 function toolLabel(tool: ToolId) {
   return findTool(tool)?.label ?? tool
+}
+
+function normalizedShortcutKey(event: KeyboardEvent) {
+  return event.key.toLowerCase()
+}
+
+function isPlusKey(event: KeyboardEvent) {
+  return event.key === '+' || event.key === '=' || event.code === 'NumpadAdd'
+}
+
+function isMinusKey(event: KeyboardEvent) {
+  return event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract'
+}
+
+function shouldIgnoreShortcutEvent(event: KeyboardEvent) {
+  if (event.isComposing) return true
+  const target = event.target as HTMLElement | null
+  if (!target) return false
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]'))
+}
+
+function playPingSound() {
+  try {
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return
+    const context = new AudioContextCtor()
+    const gain = context.createGain()
+    const oscillator = context.createOscillator()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, context.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.08)
+    gain.gain.setValueAtTime(0.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.24)
+    window.setTimeout(() => void context.close(), 320)
+  } catch {
+    // The visual ping still carries the signal when audio output is unavailable.
+  }
 }
 
 function getRendererPlatform(): 'darwin' | 'win32' | 'linux' {

@@ -77,6 +77,7 @@ test.describe('MapBerry Electron map workflow', () => {
     try {
       await expect(page.getByRole('button', { name: /Demo Map/ })).toBeVisible()
       await expect.poll(async () => mapNamed(await readLibrary(userData), 'Demo Map')?.width ?? 0).toBe(1536)
+      await expect(page.getByRole('button', { name: 'Datenordner öffnen' })).toHaveCount(0)
       await expect(page.getByText('Feldgröße')).toHaveCount(0)
       await expect(page.locator('.left-panel').getByLabel('DM-Ansicht')).toHaveCount(0)
       await expect(page.getByTestId('toolgroup-view')).toHaveAttribute('title', 'Ansicht: Pan')
@@ -84,7 +85,7 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect(page.getByText('Gridfarbe')).toHaveCount(0)
       await expect(page.getByText('Zeichenfarbe')).toHaveCount(0)
       await expect(page.getByText('Strichstärke')).toHaveCount(0)
-      await expect(page.getByTestId('grid-settings')).toHaveAttribute('title', 'Grid: Weiß, 64px')
+      await expect(page.getByTestId('grid-settings')).toHaveAttribute('title', 'Grid: Schwarz, 64px')
       await page.getByTestId('grid-settings').click()
       await expect(page.getByLabel('DM-Ansicht')).toBeVisible()
       await expect(page.getByLabel('Spieleransicht')).toBeVisible()
@@ -92,9 +93,10 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect(page.getByLabel('Gridgröße')).toHaveValue('64')
       await expect(page.getByLabel('Grid-Offset X')).toHaveValue('0')
       await expect(page.getByLabel('Grid-Offset Y')).toHaveValue('0')
-      await expect(page.getByTestId('grid-color-toggle')).toHaveAttribute('title', 'Gridfarbe: Weiß')
+      await expect(page.getByTestId('grid-color-toggle')).toHaveAttribute('title', 'Gridfarbe: Schwarz')
       await page.getByTestId('toolgroup-fog').click()
       await expect(page.getByTestId('tool-fog-rect')).toHaveAttribute('title', 'Rechteck auf')
+      await expect(page.getByTestId('tool-fog-polygon')).toHaveCount(0)
       await expect(page.getByTestId('fog-brush-slider')).toHaveValue('44')
       await expect(page.getByTestId('fog-opacity-slider')).toHaveValue('100')
       await page.getByTestId('toolgroup-draw').click()
@@ -111,12 +113,14 @@ test.describe('MapBerry Electron map workflow', () => {
       const imported = mapNamed(library, 'playwright-map')
       const demo = mapNamed(library, 'Demo Map')
       expect(library.maps).toHaveLength(2)
-      expect(demo).toMatchObject({ width: 1536, height: 1024, gridSize: 64, gridColor: '#ffffff' })
+      expect(demo).toMatchObject({ width: 1536, height: 1024, gridType: 'none', gridVisible: false, gridSize: 64, gridThickness: 0.5, gridColor: '#000000' })
       expect(imported).toMatchObject({
         name: 'playwright-map',
-        gridType: 'square',
+        gridType: 'none',
+        gridVisible: false,
         gridSize: 50,
-        gridColor: '#ffffff',
+        gridThickness: 0.5,
+        gridColor: '#000000',
         ftPerUnit: 5
       })
       expect(imported).toBeTruthy()
@@ -145,7 +149,7 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect.poll(async () => {
         const map = mapNamed(await readLibrary(userData), 'grid-map')
         return map && `${map.gridType}:${map.gridSize}:${map.ftPerUnit}:${map.rotationPlayer}:${map.gridColor}:${map.gridOffsetX}:${map.gridOffsetY}`
-      }).toBe('hex:72:10:90:#000000:12:-8')
+      }).toBe('hex:72:10:90:#ffffff:12:-8')
     } finally {
       await closeMapBerry(launched.app)
     }
@@ -160,9 +164,50 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect(launched.page.getByLabel('Gridgröße')).toHaveValue('72')
       await expect(launched.page.getByLabel('Grid-Offset X')).toHaveValue('12')
       await expect(launched.page.getByLabel('Grid-Offset Y')).toHaveValue('-8')
-      await expect(launched.page.getByTestId('grid-color-toggle')).toHaveAttribute('title', 'Gridfarbe: Schwarz')
+      await expect(launched.page.getByTestId('grid-color-toggle')).toHaveAttribute('title', 'Gridfarbe: Weiß')
     } finally {
       await closeMapBerry(launched.app)
+    }
+  })
+
+  test('uses guarded keyboard shortcuts for grid and tools', async ({}, testInfo) => {
+      const userData = await freshUserData(testInfo)
+      const { app, page } = await launchMapBerry(userData)
+    try {
+      await importFixtureMap(page, app, testInfo, 'shortcut-map')
+      await expect.poll(async () => activeMapIn(await readLibrary(userData))?.gridType).toBe('none')
+
+      await page.getByLabel('Name').focus()
+      await page.keyboard.press('g')
+      await page.keyboard.press('2')
+      await expect.poll(async () => activeMapIn(await readLibrary(userData))?.gridType).toBe('none')
+
+      await clickCanvas(page, 0.5, 0.5)
+      await page.keyboard.press('g')
+      await page.keyboard.press('1')
+      await page.keyboard.press('g')
+      await page.keyboard.press('=')
+      await page.keyboard.press('g')
+      await page.keyboard.press('Shift+ArrowRight')
+      await page.keyboard.press('g')
+      await page.keyboard.press('c')
+      await page.keyboard.press('g')
+      await page.keyboard.press('.')
+      await expect.poll(async () => {
+        const map = activeMapIn(await readLibrary(userData))
+        return map && `${map.gridType}:${map.gridVisible}:${map.gridSize}:${map.gridOffsetX}:${map.gridColor}:${map.gridThickness}`
+      }).toBe('square:true:51:10:#ffffff:0.75')
+
+      await page.keyboard.press('f')
+      await expect(page.getByTestId('tool-fog-brush')).toBeVisible()
+      await page.keyboard.press('d')
+      await expect(page.getByTestId('draw-width-slider')).toBeVisible()
+      await page.keyboard.press('r')
+      await expect(page.getByTestId('tool-room')).toBeVisible()
+      await page.keyboard.press('h')
+      await expect(page.getByTestId('active-tool-readout')).toContainText('Pan')
+    } finally {
+      await closeMapBerry(app)
     }
   })
 
@@ -205,11 +250,21 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect.poll(async () => Boolean(mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap)).toBe(true)
       const coveredFog = mapNamed(await readLibrary(userData), 'tool-map')!.fogBitmap
       expect(await sampleFogAlpha(page, coveredFog!, 12, 12)).toBe(255)
+      await page.getByRole('button', { name: 'Raum aufdecken' }).click()
+      await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap !== coveredFog).toBe(true)
+      const room = mapNamed(await readLibrary(userData), 'tool-map')!.rooms[0]
+      const roomRevealedFog = mapNamed(await readLibrary(userData), 'tool-map')!.fogBitmap
+      expect(await sampleFogAlpha(page, roomRevealedFog!, Math.round(room.polygon[0].x), Math.round(room.polygon[0].y))).toBe(0)
 
       await page.getByTestId('toolgroup-fog').click()
+      await expect(page.getByTestId('tool-fog-polygon')).toHaveCount(0)
+      await page.getByTestId('tool-fog-brush-cover').click()
+      await shiftWheelOnCanvas(page, 0.50, 0.50, -120)
+      await page.getByTestId('toolgroup-fog').click()
+      await expect(page.getByTestId('fog-brush-slider')).toHaveValue('50')
       await page.getByTestId('tool-fog-rect').click()
       await dragOnCanvas(page, 0.47, 0.37, 0.59, 0.50)
-      await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap !== coveredFog).toBe(true)
+      await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap !== roomRevealedFog).toBe(true)
       await page.keyboard.press('Escape')
       await expect(page.getByTestId('active-tool-readout')).toContainText('Pan')
     } finally {
@@ -230,14 +285,19 @@ test.describe('MapBerry Electron map workflow', () => {
       await player.waitForLoadState('domcontentloaded')
       await expect(player.getByTestId('player-stage')).toBeVisible()
       await waitForPlayerCanvasSignal(player)
+      await page.keyboard.press('p')
+      await expect(page.getByTestId('active-tool-readout')).toContainText('Ping')
+      await clickCanvas(page, 0.5, 0.5)
+      await expect(page.getByTestId('map-canvas-host')).toHaveAttribute('data-ping-active', 'true')
+      await expect(player.getByTestId('player-stage')).toHaveAttribute('data-ping-active', 'true')
 
       await page.getByRole('button', { name: 'Spielerrahmen' }).click()
       await expect(page.getByRole('button', { name: 'Spielerrahmen' })).toHaveClass(/active/)
       await waitForPlayerCanvasSignal(player)
 
-      await page.getByRole('button', { name: 'Blackout' }).click()
+      await page.keyboard.press('b')
       await expect(player.getByTestId('player-blackout')).toBeVisible()
-      await page.getByRole('button', { name: 'Blackout' }).click()
+      await page.keyboard.press('b')
       await expect(player.getByTestId('player-stage')).toBeVisible()
 
       const closed = player.waitForEvent('close')
@@ -337,6 +397,10 @@ function mapNamed(library: Awaited<ReturnType<typeof readLibrary>>, name: string
   return library.maps.find((map) => map.name === name)
 }
 
+function activeMapIn(library: Awaited<ReturnType<typeof readLibrary>>) {
+  return library.maps.find((map) => map.id === library.activeMapId)
+}
+
 async function setRange(locator: Locator, value: string) {
   await locator.evaluate((node, nextValue) => {
     const input = node as HTMLInputElement
@@ -345,6 +409,17 @@ async function setRange(locator: Locator, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
+}
+
+async function shiftWheelOnCanvas(page: import('@playwright/test').Page, x: number, y: number, deltaY: number): Promise<void> {
+  const canvas = page.locator('[data-testid="map-canvas-host"] canvas').first()
+  await expect(canvas).toBeVisible()
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('Map canvas has no bounding box')
+  await page.mouse.move(box.x + box.width * x, box.y + box.height * y)
+  await page.keyboard.down('Shift')
+  await page.mouse.wheel(0, deltaY)
+  await page.keyboard.up('Shift')
 }
 
 async function sampleFogAlpha(page: import('@playwright/test').Page, dataUrl: string, x: number, y: number): Promise<number> {

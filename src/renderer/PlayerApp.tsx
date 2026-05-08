@@ -44,7 +44,8 @@ export function PlayerApp() {
     })
     const offPointer = window.mapberryPlayer.onPointer((ping) => {
       setPointer(ping)
-      window.setTimeout(() => setPointer(null), 1000)
+      playPingSound()
+      window.setTimeout(() => setPointer(null), 1400)
     })
     const offMeasure = window.mapberryPlayer.onMeasure(setMeasure)
     const offViewport = window.mapberryPlayer.onViewport(setViewport)
@@ -115,7 +116,7 @@ function PlayerMap({
   const playerFog = useMemo(() => tintFogSource(fogImage, width, height, '#000000', map.fogOpacity ?? 1), [fogImage, width, height, map.fogOpacity])
 
   return (
-    <div className="player-stage" data-testid="player-stage">
+    <div className="player-stage" data-testid="player-stage" data-ping-active={pointer ? 'true' : 'false'}>
       <Stage width={stageWidth} height={stageHeight}>
         <Layer>
           <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#000" listening={false} />
@@ -246,6 +247,29 @@ function getPlayerTransform(map: MapScene, viewport: PlayerViewport | null, stag
   }
 }
 
+function playPingSound() {
+  try {
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return
+    const context = new AudioContextCtor()
+    const gain = context.createGain()
+    const oscillator = context.createOscillator()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, context.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.08)
+    gain.gain.setValueAtTime(0.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.26)
+    window.setTimeout(() => void context.close(), 340)
+  } catch {
+    // Keep the visual ping even when the output device or audio context is blocked.
+  }
+}
+
 function Grid({ map, scale }: { map: MapScene; scale: number }) {
   if (map.gridType === 'none' || !map.gridVisible || map.gridSize <= 0) return null
   return (
@@ -332,8 +356,10 @@ function DoorHint({ wall, scale }: { wall: WallRecord; scale: number }) {
 function PointerShape({ pointer, scale }: { pointer: PlayerPointer; scale: number }) {
   return (
     <Group listening={false}>
+      <Circle x={pointer.x} y={pointer.y} radius={screenPx(56, scale)} stroke={GOLD} strokeWidth={screenPx(3, scale)} opacity={0.32} />
       <Circle x={pointer.x} y={pointer.y} radius={screenPx(28, scale)} stroke={GOLD} strokeWidth={screenPx(4, scale)} opacity={0.92} />
       <Circle x={pointer.x} y={pointer.y} radius={screenPx(10, scale)} fill={BERRY} stroke="#f7f1cf" strokeWidth={screenPx(3, scale)} />
+      <Text x={pointer.x + screenPx(16, scale)} y={pointer.y - screenPx(10, scale)} text="PING" fill={GOLD} fontSize={screenPx(13, scale)} fontStyle="bold" />
     </Group>
   )
 }
