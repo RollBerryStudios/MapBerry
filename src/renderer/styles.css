@@ -219,17 +219,24 @@ label {
   justify-content: space-between;
   min-height: var(--rb-titlebar-h);
   padding: 8px 14px;
+  padding-right: max(14px, var(--titlebar-controls-w, 120px));
 }
 
 .app-shell[data-platform='darwin'] .titlebar {
   padding-left: 88px;
+  padding-right: 14px;
 }
 
 .topbar {
   min-height: var(--rb-toolbar-h);
   flex-wrap: wrap;
   padding: 7px 12px;
+  padding-right: max(12px, var(--titlebar-controls-w, 120px));
   background: var(--panel-2);
+}
+
+.app-shell[data-platform='darwin'] .topbar {
+  padding-right: 12px;
 }
 
 .topbar button,
@@ -284,17 +291,47 @@ label {
   -webkit-app-region: no-drag;
 }
 
-.app-shell:not([data-platform='darwin']) .window-actions {
-  padding-right: var(--titlebar-controls-w, 120px);
-}
-
 .spacer {
   flex: 1;
 }
 
+.topbar-map-name {
+  display: inline-flex;
+  align-items: center;
+  width: min(320px, 30vw);
+  min-width: 180px;
+  gap: 7px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--rb-radius-md);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.topbar-map-name input {
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.topbar-tool {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(247, 230, 175, 0.16);
+  border-radius: var(--rb-radius-md);
+  color: var(--cream);
+  background: rgba(255, 255, 255, 0.035);
+  font-weight: 780;
+}
+
 .workspace {
   display: grid;
-  grid-template-columns: minmax(244px, 284px) minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(260px, 300px);
   min-height: 0;
   overflow: hidden;
 }
@@ -562,8 +599,22 @@ label {
 
 .grid-popover {
   display: grid;
-  width: 270px;
+  width: 300px;
   gap: 10px;
+}
+
+.segmented.compact button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.compact-check {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
 }
 
 .grid-color-choice {

@@ -59,7 +59,7 @@ import type {
 import type { HandoutRecord, PlayerNoticeTone, PlayerOverlayKind, PlayerOverlayPlacement, PlayerOverlayState, PlayerTimerState } from '../shared/mapberry'
 import { DEFAULT_PLAYER_OVERLAY_SETTINGS, EMPTY_PLAYER_OVERLAY, gridColorLabel, isGridBlack, nextGridColor, normalizeGridColor } from '../shared/mapberry'
 import { useAssetImage } from './lib/image'
-import { applyFogOp, createFogCanvas, type FogOp } from './lib/fog'
+import { applyFogOp, createFogCanvas, tintFogSource, type FogOp } from './lib/fog'
 import {
   PLAYER_VIEWPORT_STROKE,
   ROOM_PREVIEW_STROKE,
@@ -296,7 +296,10 @@ export function App() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpenToolGroup(null)
+      if (event.key === 'Escape') {
+        setOpenToolGroup(null)
+        setTool('select')
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -500,6 +503,16 @@ export function App() {
           <Upload size={18} />
           <span>{c.importMap}</span>
         </button>
+        {activeMap && (
+          <label className="topbar-map-name">
+            <MapIcon size={17} />
+            <input aria-label={c.name} value={activeMap.name} onChange={(event) => patchActiveMap({ name: event.target.value })} />
+          </label>
+        )}
+        <div className="topbar-tool" data-testid="active-tool-readout" title={c.tool}>
+          <ActiveToolIcon size={18} />
+          <span>{toolLabel(tool)}</span>
+        </div>
         <button className={`icon-text ${playerOpen ? 'active' : ''}`} onClick={togglePlayerWindow}>
           <MonitorUp size={18} />
           <span>{playerOpen ? c.playerWindowOn : c.playerWindow}</span>
@@ -524,6 +537,11 @@ export function App() {
               <RotateCw size={18} />
             </button>
           </>
+        )}
+        {activeMap && (
+          <button className="danger ghost icon-only" data-testid="delete-active-map" aria-label={c.deleteMap} title={c.deleteMap} onClick={() => handleDeleteMap(activeMap.id)}>
+            <Trash2 size={18} />
+          </button>
         )}
         <div className="spacer" />
         <select
@@ -554,46 +572,6 @@ export function App() {
             </div>
           </section>
 
-          {activeMap && (
-            <section>
-              <div className="panel-title">{c.grid}</div>
-              <label>{c.name}<input value={activeMap.name} onChange={(event) => patchActiveMap({ name: event.target.value })} /></label>
-              <div className="segmented">
-                <button className={activeMap.gridType === 'square' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'square' })}>
-                  <Grid3X3 size={16} />
-                  <span>{c.square}</span>
-                </button>
-                <button className={activeMap.gridType === 'hex' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'hex' })}>
-                  <Hexagon size={16} />
-                  <span>{c.hex}</span>
-                </button>
-                <button className={activeMap.gridType === 'none' ? 'active' : ''} onClick={() => patchActiveMap({ gridType: 'none' })}>
-                  <View size={16} />
-                  <span>{c.off}</span>
-                </button>
-              </div>
-              <label>{c.feetPerCell}<input type="number" min="0.5" max="500" step="0.5" value={activeMap.ftPerUnit} onChange={(event) => patchActiveMap({ ftPerUnit: Number(event.target.value) || 5 })} /></label>
-              <label>{c.thickness}<input type="range" min="0.25" max="5" step="0.25" value={activeMap.gridThickness} onChange={(event) => patchActiveMap({ gridThickness: Number(event.target.value) })} /></label>
-              <label className="check"><input type="checkbox" checked={activeMap.gridVisible} onChange={(event) => patchActiveMap({ gridVisible: event.target.checked })} /> {c.gridVisible}</label>
-              <label>{c.dmView}
-                <select value={activeMap.rotation} onChange={(event) => patchActiveMap({ rotation: Number(event.target.value) })}>
-                  {rotationOptions(c).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label>{c.playerView}
-                <select value={activeMap.rotationPlayer} onChange={(event) => patchActiveMap({ rotationPlayer: Number(event.target.value) })}>
-                  {rotationOptions(c).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <details className="danger-zone">
-                <summary>{c.mapOptions}</summary>
-                <button className="danger ghost icon-text" onClick={() => handleDeleteMap(activeMap.id)}>
-                  <Trash2 size={17} />
-                  <span>{c.deleteMap}</span>
-                </button>
-              </details>
-            </section>
-          )}
         </aside>
 
         <section className="map-surface">
@@ -615,6 +593,7 @@ export function App() {
                 onRoomSelect={selectRoom}
                 onWallSelect={selectWall}
                 onDrawingSelect={selectDrawing}
+                onCancelTool={() => setTool('select')}
               />
               <ToolDock
                 tool={tool}
@@ -626,6 +605,8 @@ export function App() {
                 drawWidth={drawWidth}
                 onDrawColor={setDrawColor}
                 onDrawWidth={setDrawWidth}
+                fogBrushRadius={fogBrushRadius}
+                onFogBrushRadius={setFogBrushRadius}
                 playerOverlay={playerOverlay}
                 selectedHandoutId={selectedHandoutId}
                 noticeTitle={noticeTitle}
@@ -671,14 +652,6 @@ export function App() {
         </section>
 
         <aside className="panel right-panel">
-          <section>
-            <div className="panel-title">{c.tool}</div>
-            <div className="tool-readout">
-              <ActiveToolIcon size={21} />
-              <strong>{toolLabel(tool)}</strong>
-            </div>
-            <label>{c.fogBrush}<input type="range" min="8" max="220" value={fogBrushRadius} onChange={(event) => setFogBrushRadius(Number(event.target.value))} /></label>
-          </section>
           {activeMap && (
             <MapSidePanel
               map={activeMap}
@@ -784,6 +757,8 @@ function ToolDock({
   drawWidth,
   onDrawColor,
   onDrawWidth,
+  fogBrushRadius,
+  onFogBrushRadius,
   playerOverlay,
   selectedHandoutId,
   noticeTitle,
@@ -822,6 +797,8 @@ function ToolDock({
   drawWidth: number
   onDrawColor: (color: string) => void
   onDrawWidth: (width: number) => void
+  fogBrushRadius: number
+  onFogBrushRadius: (radius: number) => void
   playerOverlay: PlayerOverlayState
   selectedHandoutId: string | null
   noticeTitle: string
@@ -879,6 +856,14 @@ function ToolDock({
                     width={drawWidth}
                     onColor={onDrawColor}
                     onWidth={onDrawWidth}
+                  />
+                )}
+                {group.id === 'fog' && (
+                  <FogSettingsPopover
+                    map={map}
+                    brushRadius={fogBrushRadius}
+                    onBrushRadius={onFogBrushRadius}
+                    onPatch={onGridPatch}
                   />
                 )}
               </div>
@@ -985,6 +970,24 @@ function GridSettingsPopover({
   return (
     <div className="tool-popover grid-popover" role="dialog" aria-label="Grid-Einstellungen">
       <div className="tool-popover-title">Grid</div>
+      <div className="segmented compact">
+        <button className={map.gridType === 'square' ? 'active' : ''} onClick={() => onPatch({ gridType: 'square' })}>
+          <Grid3X3 size={16} />
+          <span>Quadrat</span>
+        </button>
+        <button className={map.gridType === 'hex' ? 'active' : ''} onClick={() => onPatch({ gridType: 'hex' })}>
+          <Hexagon size={16} />
+          <span>Hex</span>
+        </button>
+        <button className={map.gridType === 'none' ? 'active' : ''} onClick={() => onPatch({ gridType: 'none' })}>
+          <View size={16} />
+          <span>Aus</span>
+        </button>
+      </div>
+      <label className="check compact-check">
+        <input type="checkbox" checked={map.gridVisible} onChange={(event) => onPatch({ gridVisible: event.target.checked })} />
+        <span>Grid sichtbar</span>
+      </label>
       <button
         className="grid-color-choice"
         data-testid="grid-color-toggle"
@@ -997,6 +1000,43 @@ function GridSettingsPopover({
         <span>Farbe</span>
         <strong>{gridColorLabel(map.gridColor)}</strong>
       </button>
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>ft pro Feld</span><strong>{map.ftPerUnit}</strong></span>
+        <input
+          type="number"
+          min="0.5"
+          max="500"
+          step="0.5"
+          value={map.ftPerUnit}
+          aria-label="ft pro Feld"
+          onChange={(event) => onPatch({ ftPerUnit: Number(event.target.value) || 5 })}
+        />
+      </label>
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>Linie</span><strong>{map.gridThickness}px</strong></span>
+        <input
+          type="range"
+          min="0.25"
+          max="5"
+          step="0.25"
+          value={map.gridThickness}
+          aria-label="Grid-Linienstärke"
+          data-testid="grid-thickness-slider"
+          onChange={(event) => onPatch({ gridThickness: Number(event.target.value) })}
+        />
+      </label>
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>DM-Ansicht</span></span>
+        <select aria-label="DM-Ansicht" value={map.rotation} onChange={(event) => onPatch({ rotation: Number(event.target.value) })}>
+          {rotationOptions(COPY.de).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>Spieleransicht</span></span>
+        <select aria-label="Spieleransicht" value={map.rotationPlayer} onChange={(event) => onPatch({ rotationPlayer: Number(event.target.value) })}>
+          {rotationOptions(COPY.de).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
       <label className="grid-slider">
         <span className="grid-slider-head"><span>Größe</span><strong>{map.gridSize}px</strong></span>
         <input
@@ -1082,6 +1122,49 @@ function DrawSettingsPopover({
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+function FogSettingsPopover({
+  map,
+  brushRadius,
+  onBrushRadius,
+  onPatch
+}: {
+  map: MapScene
+  brushRadius: number
+  onBrushRadius: (radius: number) => void
+  onPatch: (patch: Partial<MapScene>) => void
+}) {
+  const fogOpacity = Math.round((map.fogOpacity ?? 1) * 100)
+  return (
+    <div className="draw-settings" aria-label="Nebeleinstellungen">
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>Nebelpinsel</span><strong>{brushRadius}px</strong></span>
+        <input
+          type="range"
+          min="8"
+          max="220"
+          value={brushRadius}
+          aria-label="Nebel-Pinsel"
+          data-testid="fog-brush-slider"
+          onChange={(event) => onBrushRadius(Number(event.target.value))}
+        />
+      </label>
+      <label className="grid-slider">
+        <span className="grid-slider-head"><span>Deckkraft</span><strong>{fogOpacity}%</strong></span>
+        <input
+          type="range"
+          min="10"
+          max="100"
+          step="5"
+          value={fogOpacity}
+          aria-label="Nebel-Deckkraft"
+          data-testid="fog-opacity-slider"
+          onChange={(event) => onPatch({ fogOpacity: Number(event.target.value) / 100 })}
+        />
+      </label>
     </div>
   )
 }
@@ -1356,7 +1439,8 @@ function MapCanvas({
   onMapUpdate,
   onRoomSelect,
   onWallSelect,
-  onDrawingSelect
+  onDrawingSelect,
+  onCancelTool
 }: {
   map: MapScene
   tool: ToolId
@@ -1373,6 +1457,7 @@ function MapCanvas({
   onRoomSelect: (id: string | null) => void
   onWallSelect: (id: string | null) => void
   onDrawingSelect: (id: string | null) => void
+  onCancelTool: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -1389,6 +1474,10 @@ function MapCanvas({
   const [fogVersion, setFogVersion] = useState(0)
   const [measure, setMeasure] = useState<PlayerMeasure | null>(null)
   const [pointer, setPointer] = useState<PlayerPointer | null>(null)
+  const dmFogCanvas = useMemo(
+    () => tintFogSource(fogCanvas, fogCanvas?.width ?? 0, fogCanvas?.height ?? 0, '#ff453a', Math.min(0.48, (map.fogOpacity ?? 1) * 0.48)),
+    [fogCanvas, fogVersion, map.fogOpacity]
+  )
 
   useEffect(() => {
     const el = containerRef.current
@@ -1434,6 +1523,7 @@ function MapCanvas({
         setPath([])
         setDragStart(null)
         setDragCurrent(null)
+        onCancelTool()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1452,6 +1542,15 @@ function MapCanvas({
     const stage = stageRef.current
     const pointer = stage?.getPointerPosition()
     if (!pointer) return
+    if (event.evt.ctrlKey && playerViewport) {
+      const factor = event.evt.deltaY > 0 ? 0.92 : 1.08
+      onViewportChange({
+        ...playerViewport,
+        w: Math.max(120, Math.min((map.width || imageSize.width || 2000) * 1.5, playerViewport.w * factor)),
+        h: Math.max(90, Math.min((map.height || imageSize.height || 2000) * 1.5, playerViewport.h * factor))
+      })
+      return
+    }
     const before = screenToMap(pointer.x, pointer.y, transform)
     const factor = event.evt.deltaY > 0 ? 0.9 : 1.1
     const scale = Math.max(0.05, Math.min(8, transform.scale * factor))
@@ -1632,7 +1731,7 @@ function MapCanvas({
             {map.rooms.map((room) => <RoomShape key={room.id} room={room} selected={room.id === selectedRoomId} scale={transform.scale} onSelect={() => onRoomSelect(room.id)} />)}
             {map.walls.map((wall) => <WallShape key={wall.id} wall={wall} selected={wall.id === selectedWallId} scale={transform.scale} onSelect={() => onWallSelect(wall.id)} />)}
             {map.drawings.map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} selected={drawing.id === selectedDrawingId} scale={transform.scale} onSelect={() => onDrawingSelect(drawing.id)} />)}
-            {fogCanvas && <KonvaImage key={fogVersion} image={fogCanvas} width={fogCanvas.width} height={fogCanvas.height} opacity={0.48} listening={false} />}
+            {dmFogCanvas && <KonvaImage key={fogVersion} image={dmFogCanvas} width={dmFogCanvas.width} height={dmFogCanvas.height} listening={false} />}
             {tool === 'draw-freehand' && path.length >= 4 && <Line points={path} stroke={drawColor} strokeWidth={drawingStroke(drawWidth, transform.scale)} lineCap="round" lineJoin="round" listening={false} />}
             {roomPoints.length > 0 && <PolygonDraft points={roomPoints} previewPoint={polygonPreviewPoint} scale={transform.scale} tool={tool} />}
             {previewPoints.length > 0 && <Preview tool={tool} points={previewPoints} color={drawColor} width={drawWidth} scale={transform.scale} />}
@@ -1849,7 +1948,18 @@ function Preview({ tool, points, color, width, scale }: { tool: ToolId; points: 
 
 function PlayerViewportFrame({ viewport, scale, onChange }: { viewport: PlayerViewport; scale: number; onChange: (viewport: PlayerViewport | null) => void }) {
   return (
-    <Group x={viewport.cx} y={viewport.cy} rotation={viewport.rotation} draggable onDragEnd={(event) => onChange({ ...viewport, cx: event.target.x(), cy: event.target.y() })}>
+    <Group
+      x={viewport.cx}
+      y={viewport.cy}
+      rotation={viewport.rotation}
+      draggable
+      onDragStart={(event) => {
+        if (!event.evt.ctrlKey) event.target.stopDrag()
+      }}
+      onDragEnd={(event) => {
+        if (event.evt.ctrlKey) onChange({ ...viewport, cx: event.target.x(), cy: event.target.y() })
+      }}
+    >
       <Rect x={-viewport.w / 2} y={-viewport.h / 2} width={viewport.w} height={viewport.h} stroke={GOLD} strokeWidth={screenPx(PLAYER_VIEWPORT_STROKE, scale)} dash={screenDash([14, 8], scale)} fill="rgba(241,189,97,0.08)" />
       <Text x={-viewport.w / 2 + screenPx(14, scale)} y={-viewport.h / 2 + screenPx(12, scale)} text="Spieler" fill={GOLD} fontSize={screenPx(14, scale)} />
     </Group>

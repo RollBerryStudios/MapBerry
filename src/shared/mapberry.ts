@@ -110,6 +110,7 @@ export interface MapScene {
   cameraX: number | null
   cameraY: number | null
   cameraScale: number | null
+  fogOpacity: number
   fogBitmap: string | null
   drawings: DrawingRecord[]
   rooms: RoomRecord[]

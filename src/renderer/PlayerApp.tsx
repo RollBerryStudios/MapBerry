@@ -6,6 +6,7 @@ import type { DrawingRecord, MapScene, PlayerMapState, PlayerMeasure, PlayerOver
 import { DEFAULT_PLAYER_OVERLAY_SETTINGS, EMPTY_PLAYER_OVERLAY, normalizeGridColor } from '../shared/mapberry'
 import { localAssetUrl } from './lib/asset'
 import { useAssetImage } from './lib/image'
+import { tintFogSource } from './lib/fog'
 import { ROOM_STROKE, TOOL_PREVIEW_STROKE, WALL_STROKE, drawingStroke, screenDash, screenPx } from './lib/canvasStrokes'
 import { distance, flattened, polygonCenter, rectFromPoints } from './lib/mapMath'
 import './styles.css'
@@ -111,6 +112,7 @@ function PlayerMap({
   const width = map.width || imageSize.width || 1
   const height = map.height || imageSize.height || 1
   const view = useMemo(() => getPlayerTransform(map, viewport, stageWidth, stageHeight, width, height), [map.rotationPlayer, viewport, stageWidth, stageHeight, width, height])
+  const playerFog = useMemo(() => tintFogSource(fogImage, width, height, '#000000', map.fogOpacity ?? 1), [fogImage, width, height, map.fogOpacity])
 
   return (
     <div className="player-stage" data-testid="player-stage">
@@ -131,7 +133,7 @@ function PlayerMap({
             {map.rooms.filter((room) => room.visibility !== 'hidden').map((room) => <RoomShape key={room.id} room={room} scale={view.scale} />)}
             {map.drawings.filter((drawing) => drawing.visibleToPlayers).map((drawing) => <DrawingShape key={drawing.id} drawing={drawing} scale={view.scale} />)}
             {map.walls.filter((wall) => wall.kind === 'door' && wall.doorState === 'open').map((wall) => <DoorHint key={wall.id} wall={wall} scale={view.scale} />)}
-            {fogImage && <KonvaImage image={fogImage} width={width} height={height} opacity={1} listening={false} />}
+            {playerFog && <KonvaImage image={playerFog} width={width} height={height} listening={false} />}
             {measure && <MeasureShape measure={measure} scale={view.scale} />}
             {pointer && <PointerShape pointer={pointer} scale={view.scale} />}
           </Group>

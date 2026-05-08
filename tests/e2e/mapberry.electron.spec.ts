@@ -78,7 +78,7 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect(page.getByRole('button', { name: /Demo Map/ })).toBeVisible()
       await expect.poll(async () => mapNamed(await readLibrary(userData), 'Demo Map')?.width ?? 0).toBe(1536)
       await expect(page.getByText('Feldgröße')).toHaveCount(0)
-      await expect(page.getByLabel('DM-Ansicht')).toBeVisible()
+      await expect(page.locator('.left-panel').getByLabel('DM-Ansicht')).toHaveCount(0)
       await expect(page.getByTestId('toolgroup-view')).toHaveAttribute('title', 'Ansicht: Pan')
       await expect(page.getByTestId('toolgroup-fog')).toHaveAttribute('title', 'Nebel: Werkzeuge')
       await expect(page.getByText('Gridfarbe')).toHaveCount(0)
@@ -86,12 +86,17 @@ test.describe('MapBerry Electron map workflow', () => {
       await expect(page.getByText('Strichstärke')).toHaveCount(0)
       await expect(page.getByTestId('grid-settings')).toHaveAttribute('title', 'Grid: Weiß, 64px')
       await page.getByTestId('grid-settings').click()
+      await expect(page.getByLabel('DM-Ansicht')).toBeVisible()
+      await expect(page.getByLabel('Spieleransicht')).toBeVisible()
+      await expect(page.getByLabel('ft pro Feld')).toHaveValue('5')
       await expect(page.getByLabel('Gridgröße')).toHaveValue('64')
       await expect(page.getByLabel('Grid-Offset X')).toHaveValue('0')
       await expect(page.getByLabel('Grid-Offset Y')).toHaveValue('0')
       await expect(page.getByTestId('grid-color-toggle')).toHaveAttribute('title', 'Gridfarbe: Weiß')
       await page.getByTestId('toolgroup-fog').click()
       await expect(page.getByTestId('tool-fog-rect')).toHaveAttribute('title', 'Rechteck auf')
+      await expect(page.getByTestId('fog-brush-slider')).toHaveValue('44')
+      await expect(page.getByTestId('fog-opacity-slider')).toHaveValue('100')
       await page.getByTestId('toolgroup-draw').click()
       await expect(page.getByTestId('draw-width-slider')).toHaveValue('3')
       await expect(page.getByTestId('draw-color-black')).toHaveAttribute('aria-pressed', 'true')
@@ -128,10 +133,10 @@ test.describe('MapBerry Electron map workflow', () => {
     let launched = await launchMapBerry(userData)
     try {
       await importFixtureMap(launched.page, launched.app, testInfo, 'grid-map')
+      await launched.page.getByTestId('grid-settings').click()
       await launched.page.getByRole('button', { name: 'Hex' }).click()
       await launched.page.getByLabel('ft pro Feld').fill('10')
       await launched.page.getByLabel('Spieleransicht').selectOption('90')
-      await launched.page.getByTestId('grid-settings').click()
       await setRange(launched.page.getByLabel('Gridgröße'), '72')
       await setRange(launched.page.getByLabel('Grid-Offset X'), '12')
       await setRange(launched.page.getByLabel('Grid-Offset Y'), '-8')
@@ -148,10 +153,10 @@ test.describe('MapBerry Electron map workflow', () => {
     launched = await launchMapBerry(userData)
     try {
       await expect(launched.page.getByRole('button', { name: /grid-map/ })).toBeVisible()
+      await launched.page.getByTestId('grid-settings').click()
       await expect(launched.page.getByRole('button', { name: 'Hex' })).toHaveClass(/active/)
       await expect(launched.page.getByLabel('ft pro Feld')).toHaveValue('10')
       await expect(launched.page.getByLabel('Spieleransicht')).toHaveValue('90')
-      await launched.page.getByTestId('grid-settings').click()
       await expect(launched.page.getByLabel('Gridgröße')).toHaveValue('72')
       await expect(launched.page.getByLabel('Grid-Offset X')).toHaveValue('12')
       await expect(launched.page.getByLabel('Grid-Offset Y')).toHaveValue('-8')
@@ -199,11 +204,14 @@ test.describe('MapBerry Electron map workflow', () => {
       await page.getByTestId('fog-cover-all').click()
       await expect.poll(async () => Boolean(mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap)).toBe(true)
       const coveredFog = mapNamed(await readLibrary(userData), 'tool-map')!.fogBitmap
+      expect(await sampleFogAlpha(page, coveredFog!, 12, 12)).toBe(255)
 
       await page.getByTestId('toolgroup-fog').click()
       await page.getByTestId('tool-fog-rect').click()
       await dragOnCanvas(page, 0.47, 0.37, 0.59, 0.50)
       await expect.poll(async () => mapNamed(await readLibrary(userData), 'tool-map')?.fogBitmap !== coveredFog).toBe(true)
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('active-tool-readout')).toContainText('Pan')
     } finally {
       await closeMapBerry(app)
     }
@@ -337,6 +345,21 @@ async function setRange(locator: Locator, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
+}
+
+async function sampleFogAlpha(page: import('@playwright/test').Page, dataUrl: string, x: number, y: number): Promise<number> {
+  return page.evaluate(async ({ dataUrl, x, y }) => {
+    const image = new Image()
+    image.src = dataUrl
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.width
+    canvas.height = image.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return -1
+    ctx.drawImage(image, 0, 0)
+    return ctx.getImageData(x, y, 1, 1).data[3]
+  }, { dataUrl, x, y })
 }
 
 async function assertVisibleLayout(page: import('@playwright/test').Page): Promise<void> {
